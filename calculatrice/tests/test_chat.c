@@ -74,7 +74,7 @@ static void check_eviction(void)
     chat_t chat;
     CHECK(chat_init(&chat, 64));
     for (int i = 0; i < 20; i++) {
-        char text[16];
+        char text[24];  /* assez pour tout int : gcc le vérifie */
         snprintf(text, sizeof text, "message %d", i);
         chat_add(&chat, CHAT_USER, text);
     }

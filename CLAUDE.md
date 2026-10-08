@@ -112,22 +112,32 @@ Compiler le firmware sans l'IDE (≈ 2 min 30) :
   ESP32-C5 (compile sans avertissement). App de la calculatrice : 697
   vérifications, tous les écrans dans le simulateur, vérifiée avec les
   en-têtes de gint 2.11.
+- **08/10/2026 (2e session)** : le dossier des jeux a été déplacé dans ce
+  projet (exclu de Git). Délai d'inactivité de Claude Code ramené à 15 min.
+  Dépôt GitHub public créé avec la CI (tests + add-in) ; première
+  compilation de `Claude.g1a` réussie du premier coup, copié sur la
+  calculatrice.
 
 ## État actuel (08/10/2026)
 
-- Mini-API : fonctionne sur le Mac.
+- Mini-API : fonctionne sur le Mac. Claude Code s'arrête après 15 min sans
+  question (`INACTIVITE_MAX`, choisi par l'auteur ; c'était 30 min).
 - Firmware : compile, **pas encore téléversé** sur la carte.
-- App : fonctionne dans le simulateur, **pas encore compilée** pour la
-  calculatrice (pas de Docker, pas encore de dépôt GitHub) ni essayée.
-- Pas de dépôt GitHub pour ce projet (à proposer : public, sans les
-  secrets, déjà exclus par `.gitignore`).
+- App : dépôt public
+  [boloru78/claude-calculatrice](https://github.com/boloru78/claude-calculatrice)
+  (licence MIT), la CI compile `Claude.g1a` (72 Ko). **Copié sur la
+  calculatrice le 08/10/2026, pas encore essayé** (sans l'ESP32, l'app doit
+  démarrer et afficher la croix du Wi-Fi).
+- `gh` a maintenant la permission « workflow » (la CI du Tetris peut être
+  envoyée).
 
 ## Prochaines étapes
 
-1. Matériel : antenne U.FL, fiche jack 2,5 mm stéréo à 3 contacts, fils,
+1. Essayer l'app sur la calculatrice sans l'ESP32 : démarrage, clavier
+   visuel, menu, aide, MENU puis retour, SHIFT puis AC/ON, et la croix du
+   Wi-Fi (chaque demande d'état sans réponse fige l'écran 0,6 s).
+2. Matériel : antenne U.FL, fiche jack 2,5 mm stéréo à 3 contacts, fils,
    batterie USB.
-2. Compiler `Claude.g1a` : dépôt GitHub avec la CI des jeux (proposé à
-   l'auteur), ou Docker Desktop.
 3. Téléverser le firmware, remplir `secrets.h`, tester `PING` et `Q …` dans
    le moniteur série.
 4. Brancher la calculatrice, vérifier au multimètre, puis tester le port
