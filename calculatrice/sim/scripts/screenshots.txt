@@ -1,0 +1,66 @@
+# Parcours de tous les écrans de l'app, avec captures (make screenshots).
+# Lancé aussi par make check : il échoue si un texte sort de l'écran.
+# Le faux ESP32 répond toujours pareil (SIM_ESP32=faux). Syntaxe des
+# scripts : sim/README.md
+DELAY:150
+WAIT:12                         # l'horloge tourne
+SHOT:accueil
+
+# Une question, puis une deuxième plus longue.
+EXE
+TEXTE:C'est_quoi_pi_?
+SHOT:clavier
+EXIT EXE                        # on referme et rouvre : le texte reste
+TEXTE:|                         # ↵ : envoi
+WAIT:5
+SHOT:reponse
+EXE
+TEXTE:Et_la_dérivée_de_x^2_?|
+WAIT:5
+SHOT:reponse_longue
+UP UP UP                        # défilement
+SHOT:defilement
+DOWN DOWN DOWN
+
+# Les pages du clavier et les majuscules.
+EXE
+SHIFT
+SHOT:clavier_majuscule
+UP EXE                          # touche de page : 123
+SHOT:clavier_123
+EXE                             # éà
+SHOT:clavier_accents
+EXE                             # abc
+RIGHT DOWN LEFT DEL AC
+EXIT
+
+# Menu, état de la connexion, nouvelle conversation.
+EXIT
+SHOT:menu
+DOWN DOWN EXE                   # État de la connexion
+SHOT:connexion
+EXE
+EXIT DOWN EXE                   # Nouvelle conversation
+SHOT:nouvelle
+
+# L'ESP32 débranché, puis sans Wi-Fi.
+ESP32:absent
+WAIT:110                        # 11 s : nouvelle demande d'état
+SHOT:sans_esp32
+EXE
+TEXTE:Allo_?|
+SHOT:erreur_esp32
+ESP32:sanswifi
+WAIT:110
+EXE
+TEXTE:Allo_?|
+SHOT:sans_wifi
+ESP32:faux
+WAIT:110
+
+# Aide complète, puis Quitter.
+EXIT DOWN DOWN DOWN EXE
+SHOT:aide
+RIGHT RIGHT RIGHT RIGHT RIGHT RIGHT LEFT RIGHT
+EXE                             # EXE sur la dernière page : retour
+EXIT DOWN DOWN DOWN DOWN EXE

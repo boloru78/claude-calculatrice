@@ -1,0 +1,12 @@
+# Secrets : ne jamais les publier
+mac/code-secret.txt
+esp32-c5/claude_calculatrice/secrets.h
+
+# Les jeux (dépôts à part) et la sauvegarde de la calculatrice : pas ici
+jeux calculatrice/
+
+# Fichiers créés automatiquement
+mac/.conversation
+__pycache__/
+build/
+.DS_Store

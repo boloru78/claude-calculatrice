@@ -1,0 +1,35 @@
+# Images de l'app, dessinées en texte : « # » = noir, « . » = blanc.
+#
+# Chaque image commence par une ligne « @ nom » suivie de ses lignes de
+# pixels (32 pixels de large au plus). Une ligne vide termine l'image.
+# Dans le code C, l'image « key_shift » devient SPR_KEY_SHIFT.
+#
+# Après modification, régénérer src/assets.c avec : make assets
+
+# Touches spéciales du clavier visuel (7 pixels de haut, comme le texte).
+@ key_shift
+...#...
+..#.#..
+.#...#.
+###.###
+..#.#..
+..#.#..
+..###..
+
+@ key_backspace
+...######
+..#.....#
+.#..#.#.#
+#....#..#
+.#..#.#.#
+..#.....#
+...######
+
+@ key_enter
+......#
+......#
+..#...#
+.##...#
+#######
+.##....
+..#....

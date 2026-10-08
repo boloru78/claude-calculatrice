@@ -1,0 +1,59 @@
+name: Compilation et tests
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests sur PC
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: calculatrice
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer Pillow
+        run: python -m pip install --quiet pillow
+
+      # Tests de la logique, parcours de tous les écrans dans le simulateur
+      # et vérification que src/assets.c est à jour.
+      - name: make check
+        run: make check PYTHON=python
+
+  addin:
+    name: Add-in fx-9750GIII
+    runs-on: ubuntu-latest
+    # Image Docker non officielle contenant le fxSDK, gint et le compilateur
+    # sh-elf-gcc déjà compilés : https://github.com/Manawyrm/fxsdk-docker
+    # (la même que pour les jeux, épinglée par son empreinte).
+    container:
+      image: manawyrm/fxsdk:0.0.3@sha256:b5283be1ba98d90aadc2cbc767d0424baa801344c71108c587e922b37392beaf
+    defaults:
+      run:
+        working-directory: calculatrice
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compiler avec le fxSDK
+        run: |
+          export PATH="/root/.local/bin:$PATH"
+          fxsdk build-fx
+          fxgxa -d Claude.g1a
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Claude-g1a
+          path: calculatrice/Claude.g1a
+          if-no-files-found: error

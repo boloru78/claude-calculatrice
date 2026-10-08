@@ -1,0 +1,10 @@
+# Essai avec le vrai Claude, à travers la mini-API du Mac :
+#   (dans mac/) ./demarrer.sh       puis, ici :
+#   SIM_ESP32=mac ./build/claude-sim -o build/essai sim/essai.txt
+# Ce script n'est pas lancé par make check (il demande la mini-API).
+ESP32:mac
+DELAY:150
+WAIT:12
+EXE
+TEXTE:Salut_!_Explique-moi_en_bref_ce_qu'est_une_intégrale.|
+SHOT:essai
