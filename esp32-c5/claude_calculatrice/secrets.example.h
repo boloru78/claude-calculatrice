@@ -24,4 +24,9 @@
 #define MAC_PORT 8765
 #define MAC_CODE "colle-ici-le-contenu-de-code-secret.txt"
 
+/* Adresse Internet de la mini-API, pour s'en servir loin de la maison
+ * (Tailscale Funnel : voir le README), par exemple
+ * "https://macbook-de-hugo.tail1234.ts.net". Laisser "" si aucune. */
+#define MAC_URL_INTERNET ""
+
 #endif /* SECRETS_H */

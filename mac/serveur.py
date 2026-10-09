@@ -22,7 +22,9 @@ sur la calculatrice : 403 code faux ou appareil hors du réseau local,
 
 Sécurité : Claude est lancé sans aucun outil (il ne peut ni lire ni modifier
 de fichier, ni exécuter de commande), et seuls les appareils du réseau local
-qui connaissent le code secret sont acceptés.
+qui connaissent le code secret sont acceptés. Tailscale Funnel (voir le
+README) transmet les requêtes venues d'Internet depuis ce Mac même : elles
+passent aussi, avec le code secret.
 
 La conversation complète est notée dans conversation.txt (à ouvrir sur le
 Mac). Le serveur s'annonce aussi sur le réseau local (Bonjour, service

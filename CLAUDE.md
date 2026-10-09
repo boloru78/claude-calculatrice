@@ -60,6 +60,21 @@ Trois parties, une par dossier (le README détaille tout) :
   `secrets.h` : seul `MAC_CODE` est obligatoire.
 - **Conversation lisible sur le Mac** : `mac/conversation.txt` (exclu de
   Git, droits 600), questions et réponses complètes.
+- **Mac à la maison, ESP32 n'importe où** (demandé par l'auteur) : Tailscale
+  Funnel (gratuit), installé le 08/10/2026 (`brew install --cask
+  tailscale-app`, compte Tailscale de l'auteur via GitHub),
+  `tailscale funnel --bg 8765` → adresse `https://….ts.net` dans
+  `MAC_URL_INTERNET` de `secrets.h` (ne pas la publier : `tailscale funnel
+  status` la redonne). L'ESP32 essaie Bonjour, puis
+  `MAC_ADRESSE`, puis cette adresse en HTTPS, en vérifiant le certificat
+  avec ISRG Root X1 et X2 (tirées du trousseau système du Mac). La chaîne
+  actuelle : YE2 → Root YE (signée par X2) → **X2**. Si un jour Let's
+  Encrypt ne passe plus par X2, ajouter ISRG Root YE/YR à
+  `CERTIFICATS_RACINES`.
+- **Partition « Huge APP »** obligatoire (HTTPS) : FQBN
+  `esp32:esp32:esp32c5:CDCOnBoot=cdc,PartitionScheme=huge_app`.
+  `CDCOnBoot=cdc` car la carte de l'auteur est branchée par sa prise USB
+  native (USB-Serial/JTAG, `/dev/cu.usbmodem14101`).
 - **App de la calculatrice**, choisie par l'auteur :
   - en haut à gauche l'heure avec les secondes, en haut à droite l'icône
     Wi-Fi (4 barres selon le RSSI, × si l'ESP32 ne répond pas) ;
@@ -89,9 +104,11 @@ Trois parties, une par dossier (le README détaille tout) :
   `ERR <msg>` ; `NOUV` → `OK` ; `SCAN` → `W <n> <rssi> <O|W|P|E|X>[*] <nom>`…
   `FIN` ; `WIFI <n>⇥<utilisateur>⇥<mdp>` et `WIFIC <sécu>⇥<nom>⇥…` → lignes
   `R`, `FIN`. Décrit dans `calculatrice/src/protocol.h` et le firmware.
-- **Firmware** : 97 % de la partition par défaut (1,25 Mo). S'il grossit,
-  passer à « Huge APP ». Dans un `.ino`, les types doivent être définis
-  avant la première fonction (l'IDE génère les prototypes en tête).
+- **Firmware** : 40 % de la partition « Huge APP » (3 Mo). Dans un `.ino`,
+  les types doivent être définis avant la première fonction (l'IDE génère
+  les prototypes en tête).
+- `esp32-c5/wifi.py` : le menu Wi-Fi, mais depuis le Mac par USB (le mot de
+  passe ne s'affiche pas). Utile tant que le câble jack n'existe pas.
 - **Menu de l'app** : 5 entrées au plus (une 6e ne tient pas en hauteur) ;
   « État de la connexion » a été remplacé par « Wi-Fi ».
 - **Docker n'est pas installé** : l'add-in est compilé par la CI GitHub
@@ -142,9 +159,14 @@ Compiler le firmware sans l'IDE (≈ 2 min 30) :
 - Mini-API : fonctionne sur le Mac (testée avec un faux `claude`).
   Claude Code s'arrête après 15 min sans question (`INACTIVITE_MAX`, choisi
   par l'auteur ; c'était 30 min). `conversation.txt` et Bonjour testés.
-- Firmware : compile sans avertissement avec le Wi-Fi, **pas encore
-  téléversé**. L'auteur a une carte ESP32 Espressif (vue en USB sur
-  `/dev/cu.usbmodem14101`).
+- Firmware : **téléversé** le 08/10/2026 sur la carte de l'auteur (ESP32-C5,
+  Wi-Fi 6 bi-bande), `secrets.h` rempli (code secret, adresse locale du
+  Mac, adresse Funnel ; pas de Wi-Fi). Testé par USB : `PING` répond,
+  `SCAN` voit le Wi-Fi de la maison (-58 dBm, WPA). **Aucun réseau retenu
+  encore** : à faire avec `esp32-c5/wifi.py`. La mini-API répond par
+  Funnel (`/etat` → OK, faux code → 403).
+- Pas encore de câble jack : la calculatrice ne peut pas parler à l'ESP32
+  (l'auteur a cru qu'ils se trouveraient par USB : expliqué).
 - App 1.1.0 (menu Wi-Fi) : 742 vérifications, tous les écrans dans le
   simulateur, compilée par la CI (76 Ko). Dépôt public
   [boloru78/claude-calculatrice](https://github.com/boloru78/claude-calculatrice)
@@ -155,13 +177,14 @@ Compiler le firmware sans l'IDE (≈ 2 min 30) :
 
 ## Prochaines étapes
 
-1. Essayer l'app sur la calculatrice sans l'ESP32 : démarrage, clavier
+1. Connecter l'ESP32 au Wi-Fi (`esp32-c5/wifi.py`), puis tester `Q …`
+   par USB, par le réseau local et par Funnel (partage de connexion du
+   téléphone).
+2. Essayer l'app sur la calculatrice sans l'ESP32 : démarrage, clavier
    visuel, menu, aide, MENU puis retour, SHIFT puis AC/ON, et la croix du
    Wi-Fi (chaque demande d'état sans réponse fige l'écran 0,6 s).
-2. Matériel : antenne U.FL, fiche jack 2,5 mm stéréo à 3 contacts, fils,
-   batterie USB.
-3. Téléverser le firmware, remplir `secrets.h`, tester `PING` et `Q …` dans
-   le moniteur série.
+3. Matériel : fiche jack 2,5 mm stéréo à 3 contacts, fils, batterie USB
+   (antenne U.FL : à vérifier, le signal est déjà correct).
 4. Brancher la calculatrice, vérifier au multimètre, puis tester le port
    série ; ajuster `link.S` / `platform_gint.c` si les syscalls se
    comportent autrement que prévu.

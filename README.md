@@ -9,6 +9,9 @@ transmet en Wi-Fi à ce Mac, qui la pose à Claude avec l'abonnement Claude
 Calculatrice ──câble 2,5 mm──► ESP32-C5 ──Wi-Fi──► Mac (mini-API) ──► Claude
 ```
 
+Le Mac peut rester à la maison : l'ESP32 le joint aussi par Internet
+(Tailscale Funnel, gratuit), depuis n'importe quel Wi-Fi.
+
 ## Organisation
 
 ```
@@ -24,6 +27,7 @@ claude-calculatrice/
 │   ├── code-secret.txt         créé au premier lancement (ne pas publier)
 │   └── conversation.txt        la conversation complète (ne pas publier)
 ├── esp32-c5/
+│   ├── wifi.py                 choisir le Wi-Fi de l'ESP32 depuis le Mac (USB)
 │   └── claude_calculatrice/  Le firmware de l'ESP32-C5 (Arduino)
 │       ├── claude_calculatrice.ino
 │       ├── secrets.example.h   modèle des réglages secrets
@@ -74,6 +78,34 @@ tail -f ~/Documents/claude-calculatrice/mac/conversation.txt  # en direct (Ctrl+
 L'ESP32 le retrouve ainsi tout seul, même si l'adresse du Mac change ou si
 on change de réseau.
 
+### Depuis n'importe où : Tailscale Funnel
+
+Le Mac reste à la maison ; l'ESP32, lui, peut être n'importe où avec
+Internet (le plus simple : le **partage de connexion du téléphone**).
+[Tailscale](https://tailscale.com) (gratuit) donne au Mac une adresse
+Internet fixe et chiffrée (HTTPS), qui mène à la mini-API :
+
+1. Installer Tailscale (`brew install --cask tailscale-app`), l'ouvrir,
+   autoriser son extension, se connecter (compte gratuit, par exemple avec
+   GitHub).
+2. Une seule fois (Tailscale demande d'activer Funnel dans le navigateur) :
+   ```sh
+   /Applications/Tailscale.app/Contents/MacOS/Tailscale funnel --bg 8765
+   ```
+   Il affiche l'adresse, par exemple
+   `https://mon-mac.tail1234.ts.net`, et reste actif même
+   après un redémarrage du Mac. Pour l'arrêter : `… funnel --https=443 off`.
+3. Mettre cette adresse dans `MAC_URL_INTERNET` (`secrets.h`), puis
+   téléverser le firmware.
+
+L'ESP32 cherche d'abord le Mac sur son réseau (Bonjour, puis
+`MAC_ADRESSE`), puis par Internet. Il vérifie le certificat HTTPS
+(Let's Encrypt) avant d'envoyer le code secret. Sans le code secret, la
+mini-API refuse tout, même par Internet.
+
+**Conditions :** le Mac allumé, **ouvert** (un MacBook fermé s'endort même
+avec `demarrer.sh`), branché sur le secteur, avec la mini-API lancée.
+
 **Rapidité :** le serveur garde Claude Code démarré pendant une
 conversation. La 1re question prend environ 7 s, les suivantes 3 à 4 s.
 Claude Code s'arrête après 15 minutes sans question.
@@ -89,15 +121,18 @@ modèle : `./demarrer.sh --modele haiku` (ou `sonnet`, `opus`).
    l'adresse du Mac (facultatifs : le Wi-Fi se choisit aussi depuis la
    calculatrice, et le Mac est retrouvé par Bonjour).
 2. Ouvrir `claude_calculatrice.ino` dans l'Arduino IDE.
-3. Carte : **ESP32C5 Dev Module** (Arduino-ESP32 3.3 ou plus récent).
+3. Carte : **ESP32C5 Dev Module** (Arduino-ESP32 3.3 ou plus récent). Si
+   l'ESP32 est branché par sa prise USB « native » (le Mac le voit comme
+   « USB JTAG/serial debug unit », port `/dev/cu.usbmodem…`) : **Outils →
+   USB CDC On Boot → Enabled**, sinon le moniteur série reste muet.
 4. Brancher l'ESP32 en USB, choisir son port, téléverser.
 5. Ouvrir le moniteur série à **115200 bauds**, fin de ligne « Nouvelle
    ligne ».
 
 La version **WROOM-1U** a besoin d'une **antenne Wi-Fi U.FL** branchée,
-sinon elle ne capte presque rien. Le programme occupe 97 % de la place
-prévue par défaut : si un jour l'IDE dit qu'il est trop gros, choisir
-**Outils → Partition Scheme → Huge APP**.
+sinon elle ne capte presque rien. **Outils → Partition Scheme → Huge APP
+(3MB No OTA)** : avec HTTPS, le programme ne tient plus dans la partition
+par défaut (les réseaux retenus ne sont pas effacés en changeant).
 
 Le voyant RGB indique l'état : bleu = connexion au Wi-Fi, vert = prêt,
 jaune = Claude réfléchit, rouge = erreur. L'heure est réglée par Internet
@@ -117,8 +152,15 @@ Dans le moniteur série, taper les mêmes commandes que la calculatrice :
 
 ### Le Wi-Fi
 
-Le réseau se choisit **depuis la calculatrice** (EXIT → Wi-Fi). L'ESP32 sait
-se connecter aux réseaux :
+Le réseau se choisit **depuis la calculatrice** (EXIT → Wi-Fi), ou depuis le
+Mac par le câble USB, tant que le câble de la calculatrice n'est pas prêt :
+
+```sh
+python3 ~/Documents/claude-calculatrice/esp32-c5/wifi.py
+```
+
+(Le mot de passe se tape sans s'afficher ; fermer avant le moniteur série
+de l'Arduino IDE.) L'ESP32 sait se connecter aux réseaux :
 
 - **ouverts**, y compris « ouverts améliorés » (OWE) ;
 - **à mot de passe** : WPA, WPA2, WPA3, et les vieux réseaux WEP ;
@@ -135,9 +177,11 @@ Ce qui ne marche pas :
   EAP-TLS) ;
 - les réseaux à **page de connexion web** (hôtels, cafés, réseaux invités) :
   l'ESP32 n'a pas de navigateur. Il le détecte et l'affiche ;
-- pour que Claude réponde, **le Mac doit être sur le même réseau** et
+- sans Tailscale Funnel, **le Mac doit être sur le même réseau** et
   joignable : beaucoup de réseaux d'école ou publics isolent les appareils
-  entre eux. Le compte rendu indique « Mac : introuvable » dans ce cas.
+  entre eux. Avec Funnel, il suffit que le réseau donne accès à Internet.
+  Le compte rendu indique « Mac : trouvé (réseau local) », « (Internet) »
+  ou « introuvable ».
 
 ### Branchement à la calculatrice
 
@@ -176,8 +220,8 @@ câble.
   ni modifier, ni exécuter quoi que ce soit sur le Mac. `--safe-mode` ignore
   les réglages personnels de Claude Code mais garde la connexion à
   l'abonnement. Ne pas utiliser `--bare`, qui exige une clé API payante.
-- La mini-API n'accepte que les appareils du **réseau local** qui
-  connaissent le **code secret**.
+- La mini-API n'accepte que les appareils du **réseau local** (ou ce qui
+  arrive par Tailscale Funnel) qui connaissent le **code secret**.
 - `secrets.h`, `code-secret.txt` et `conversation.txt` ne doivent **jamais**
   être publiés (déjà exclus par `.gitignore`).
 - Les mots de passe Wi-Fi sont gardés **en clair** dans la mémoire de

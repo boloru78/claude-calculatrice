@@ -38,15 +38,16 @@
  * derniers, dans la mémoire flash) : au démarrage, ou si le Wi-Fi est perdu,
  * l'ESP32 se connecte au premier qu'il voit, puis au réseau de secrets.h.
  *
- * La mini-API s'annonce sur le réseau avec Bonjour (mDNS) : l'ESP32 la
- * retrouve même si l'adresse du Mac change ; sinon il essaie l'adresse de
- * secrets.h.
+ * La mini-API est cherchée sur le réseau avec Bonjour (mDNS), puis à
+ * l'adresse de secrets.h, puis par Internet (MAC_URL_INTERNET, Tailscale
+ * Funnel, en HTTPS) : le Mac peut rester à la maison.
  *
  * Carte : ESP32-C5 (Arduino-ESP32 3.3 ou plus récent, carte « ESP32C5 Dev
  * Module »). Pour la version WROOM-1U, une antenne Wi-Fi doit être branchée
  * sur la prise U.FL, sinon le Wi-Fi ne capte presque rien. */
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include <NetworkClientSecure.h>
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_eap_client.h>
@@ -57,6 +58,9 @@
 #include "secrets.h"
 #else
 #error "Copier secrets.example.h en secrets.h (même dossier) et le remplir."
+#endif
+#ifndef MAC_URL_INTERNET
+#define MAC_URL_INTERNET ""  // secrets.h d'avant l'accès par Internet
 #endif
 
 //---
@@ -490,11 +494,12 @@ static void suivre_wifi(void)
     wl_status_t etat = WiFi.status();
     if (etat == precedent)
         return;
+    bool etait_connecte = precedent == WL_CONNECTED;
     precedent = etat;
     if (etat == WL_CONNECTED) {
         Serial.printf("Wi-Fi connecté : %s (ESP32 en %s)\n",
             WiFi.SSID().c_str(), WiFi.localIP().toString().c_str());
-    } else if (etat == WL_DISCONNECTED || etat == WL_CONNECTION_LOST) {
+    } else if (etait_connecte) {
         Serial.println("Wi-Fi perdu, reconnexion...");
     }
     voyant_etat();
@@ -502,10 +507,66 @@ static void suivre_wifi(void)
 
 //---
 // Mini-API du Mac
+//
+// Trois façons de la joindre, essayées dans cet ordre :
+//   1. Bonjour : le Mac est sur le même réseau que l'ESP32 ;
+//   2. l'adresse MAC_ADRESSE de secrets.h, sur le même réseau ;
+//   3. son adresse Internet MAC_URL_INTERNET (Tailscale Funnel, en HTTPS) :
+//      le Mac reste à la maison, l'ESP32 est n'importe où avec Internet.
 //---
 
-static String mac_hote = MAC_ADRESSE;
-static uint16_t mac_port = MAC_PORT;
+/* Certificats racines de Let's Encrypt (ISRG Root X1 et X2, valables
+ * jusqu'en 2035 et 2040), qui signent les adresses *.ts.net de Tailscale.
+ * Grâce à eux, l'ESP32 vérifie qu'il parle bien à ton Mac avant de lui
+ * envoyer le code secret. */
+static char const CERTIFICATS_RACINES[] = R"(-----BEGIN CERTIFICATE-----
+MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
+TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
+cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
+WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
+ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
+MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
+h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
+0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
+A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
+T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
+B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
+B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
+KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
+OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
+jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
+qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
+rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
+HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
+hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
+ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
+3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
+NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5
+ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur
+TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC
+jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc
+oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq
+4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA
+mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
+emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIICGzCCAaGgAwIBAgIQQdKd0XLq7qeAwSxs6S+HUjAKBggqhkjOPQQDAzBPMQsw
+CQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJuZXQgU2VjdXJpdHkgUmVzZWFyY2gg
+R3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBYMjAeFw0yMDA5MDQwMDAwMDBaFw00
+MDA5MTcxNjAwMDBaME8xCzAJBgNVBAYTAlVTMSkwJwYDVQQKEyBJbnRlcm5ldCBT
+ZWN1cml0eSBSZXNlYXJjaCBHcm91cDEVMBMGA1UEAxMMSVNSRyBSb290IFgyMHYw
+EAYHKoZIzj0CAQYFK4EEACIDYgAEzZvVn4CDCuwJSvMWSj5cz3es3mcFDR0HttwW
++1qLFNvicWDEukWVEYmO6gbf9yoWHKS5xcUy4APgHoIYOIvXRdgKam7mAHf7AlF9
+ItgKbppbd9/w+kHsOdx1ymgHDB/qo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0T
+AQH/BAUwAwEB/zAdBgNVHQ4EFgQUfEKWrt5LSDv6kviejM9ti6lyN5UwCgYIKoZI
+zj0EAwMDaAAwZQIwe3lORlCEwkSHRhtFcP9Ymd70/aTSVaYgLXTWNLxBo1BfASdW
+tL4ndQavEi51mI38AjEAi/V3bNTIZargCyzuFJ0nN6T5U6VR5CmD1/iQMVtCnwr1
+/q4AaOeMSQ+2b1tbFfLn
+-----END CERTIFICATE-----
+)";
+
+static String mac_url = String("http://") + MAC_ADRESSE + ":" + MAC_PORT;
 static volatile bool mac_a_chercher = true;  // nouveau réseau : où est le Mac ?
 static bool bonjour_pret;
 
@@ -515,36 +576,27 @@ static void sur_adresse(arduino_event_id_t, arduino_event_info_t)
     mac_a_chercher = true;
 }
 
-/* Cherche la mini-API sur le réseau (Bonjour), sinon prend l'adresse de
- * secrets.h. Renvoie vrai si Bonjour l'a trouvée. */
-static bool trouver_mac(void)
-{
-    mac_a_chercher = false;
-    if (!bonjour_pret)
-        bonjour_pret = MDNS.begin(NOM_BONJOUR);
-    if (bonjour_pret && MDNS.queryService(SERVICE_BONJOUR, "tcp") > 0
-            && MDNS.address(0) != IPAddress()) {
-        mac_hote = MDNS.address(0).toString();
-        mac_port = MDNS.port(0);
-        Serial.printf("Mini-API trouvée : http://%s:%d\n", mac_hote.c_str(),
-            mac_port);
-        return true;
-    }
-    mac_hote = MAC_ADRESSE;
-    mac_port = MAC_PORT;
-    return false;
-}
-
-/* Envoie une requête à la mini-API. Renvoie le code HTTP (négatif si le
- * Mac est injoignable) et place le corps de la réponse dans [corps]. */
-static int requete_mac(char const *methode, char const *chemin,
-    String const &texte, String &corps, uint32_t delai_ms)
+/* Envoie une requête à [base] + [chemin] (http:// ou https://). Renvoie le
+ * code HTTP (négatif si le Mac est injoignable) et place le corps de la
+ * réponse dans [corps]. */
+static int requete(char const *methode, String const &base,
+    char const *chemin, String const &texte, String &corps,
+    uint32_t connexion_ms, uint32_t delai_ms)
 {
     HTTPClient http;
-    String url = String("http://") + mac_hote + ":" + mac_port + chemin;
-    http.setConnectTimeout(5000);
+    NetworkClientSecure securise;
+    String url = base + chemin;
+    http.setConnectTimeout(connexion_ms);
     http.setTimeout(delai_ms);
-    if (!http.begin(url)) {
+    bool pret;
+    if (url.startsWith("https://")) {
+        securise.setCACert(CERTIFICATS_RACINES);
+        securise.setHandshakeTimeout(15);
+        pret = http.begin(securise, url);
+    } else {
+        pret = http.begin(url);
+    }
+    if (!pret) {
         corps = "Adresse du Mac invalide.";
         return -1;
     }
@@ -559,19 +611,63 @@ static int requete_mac(char const *methode, char const *chemin,
     return statut;
 }
 
+/* Vrai si la mini-API répond à [base]. */
+static bool mac_repond(String const &base, uint32_t delai_ms)
+{
+    String corps;
+    return requete("GET", base, "/etat", "", corps, delai_ms, delai_ms) == 200
+        && corps == "OK";
+}
+
+/* Cherche la mini-API (voir plus haut). Renvoie comment elle a été
+ * trouvée : « réseau local », « Internet », ou "" si elle ne répond pas. */
+static String trouver_mac(void)
+{
+    mac_a_chercher = false;
+    if (!bonjour_pret)
+        bonjour_pret = MDNS.begin(NOM_BONJOUR);
+    if (bonjour_pret && MDNS.queryService(SERVICE_BONJOUR, "tcp") > 0
+            && MDNS.address(0) != IPAddress()) {
+        mac_url = "http://" + MDNS.address(0).toString() + ":"
+            + MDNS.port(0);
+        Serial.println("Mini-API trouvée (Bonjour) : " + mac_url);
+        return "réseau local";
+    }
+
+    String locale = String("http://") + MAC_ADRESSE + ":" + MAC_PORT;
+    if (mac_repond(locale, 3000)) {
+        mac_url = locale;
+        Serial.println("Mini-API trouvée : " + mac_url);
+        return "réseau local";
+    }
+
+    String internet = MAC_URL_INTERNET;
+    while (internet.endsWith("/"))
+        internet.remove(internet.length() - 1);
+    if (internet.length() && mac_repond(internet, 10000)) {
+        mac_url = internet;
+        Serial.println("Mini-API trouvée (Internet) : " + mac_url);
+        return "Internet";
+    }
+
+    mac_url = locale;
+    return "";
+}
+
 /* POST à la mini-API ; si le Mac ne répond pas, on le cherche de nouveau
  * (son adresse a pu changer) et on réessaie une fois. */
 static int appeler_mac(char const *chemin, String const &texte, String &corps)
 {
     if (mac_a_chercher)
         trouver_mac();
-    int statut = requete_mac("POST", chemin, texte, corps, DELAI_HTTP_MS);
+    int statut = requete("POST", mac_url, chemin, texte, corps, 5000,
+        DELAI_HTTP_MS);
     if (statut == HTTPC_ERROR_CONNECTION_REFUSED) {
-        String avant = mac_hote;
-        uint16_t port_avant = mac_port;
+        String avant = mac_url;
         trouver_mac();
-        if (mac_hote != avant || mac_port != port_avant)
-            statut = requete_mac("POST", chemin, texte, corps, DELAI_HTTP_MS);
+        if (mac_url != avant)
+            statut = requete("POST", mac_url, chemin, texte, corps, 5000,
+                DELAI_HTTP_MS);
     }
     return statut;
 }
@@ -759,13 +855,12 @@ static void connecter_et_repondre(Stream &sortie, Reseau const &r,
     voyant_etat();
 
     String internet = etat_internet();
-    bool bonjour = trouver_mac();
-    String corps;
-    bool mac = bonjour || requete_mac("GET", "/etat", "", corps, 3000) == 200;
+    String mac = trouver_mac();
 
     String texte = "Wi-Fi : connecté à " + propre(r.nom) + ".\n";
     texte += "Internet : " + internet + ".\n";
-    texte += mac ? "Mac : trouvé." : "Mac : introuvable sur ce réseau.";
+    texte += mac.length() ? "Mac : trouvé (" + mac + ")."
+                          : "Mac : introuvable (mini-API lancée ?).";
     envoyer_reponse(sortie, texte);
 }
 
