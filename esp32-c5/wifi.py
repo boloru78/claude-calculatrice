@@ -57,11 +57,16 @@ class ESP32:
 
     def commande(self, texte, duree):
         """Envoie une commande ; renvoie ses lignes de réponse, jusqu'à la
-        ligne finale (FIN, OK, PONG… ou ERR…), ou None sans réponse."""
+        ligne finale (FIN, OK, PONG… ou ERR…), ou None sans réponse. Les
+        messages de l'ESP32 (démarrage, Wi-Fi…) sont affichés en passant."""
         os.write(self.fd, texte.encode("utf-8") + b"\n")
         reponse = []
         for ligne in self.lignes(duree):
-            reponse.append(ligne)
+            if ligne == "ATT" or ligne.startswith(("R ", "W ", "PONG", "ERR")) \
+                    or ligne in ("FIN", "OK"):
+                reponse.append(ligne)
+            elif ligne:
+                print("  (ESP32) " + ligne)
             if ligne in ("FIN", "OK") or ligne.startswith(("PONG", "ERR")):
                 return reponse
         return None
@@ -90,8 +95,9 @@ def main():
     port = sys.argv[1] if len(sys.argv) > 1 else trouver_port()
     esp = ESP32(port)
     print(f"ESP32 sur {port}. Un instant…")
-    for _ in esp.lignes(4):  # l'ouverture du port peut le redémarrer
-        pass
+    for ligne in esp.lignes(4):  # l'ouverture du port peut le redémarrer
+        if ligne:
+            print("  (ESP32) " + ligne)
 
     etat = esp.commande("PING", 5)
     if not etat:
@@ -139,9 +145,14 @@ def main():
     for champ in champs:
         commande += "\t" + champ
 
-    print(f"Connexion à {nom}… (jusqu'à 40 s)")
-    reponse = esp.commande(commande, 60)
+    print(f"Connexion à {nom}… (jusqu'à 1 min)")
+    reponse = esp.commande(commande, 120)
     if not reponse:
+        etat = esp.commande("PING", 5) or []
+        morceaux = etat[-1].split(" ", 3) if etat else []
+        if len(morceaux) == 4:
+            sys.exit(f"Pas de compte rendu, mais l'ESP32 est connecté à "
+                     f"{morceaux[3]}.")
         sys.exit("L'ESP32 ne répond pas.")
     for ligne in reponse:
         if ligne.startswith("R "):

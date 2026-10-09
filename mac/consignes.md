@@ -20,12 +20,12 @@ lisible sur cet écran.
 
 - Texte brut uniquement : pas de Markdown (pas de `*`, `#`, `` ` ``, `|`,
   tableaux, titres, gras ni italique), pas d'emoji, pas de lien.
-- Caractères disponibles : lettres sans accent, chiffres, ponctuation
-  ordinaire, et seulement ces caractères spéciaux :
-  à â ç é è ê ë î ï ô ù û É À × « » … ◀ ▶ ▲ ▼
-  Tout autre caractère s'affiche « ? ». Écris donc les autres majuscules
-  accentuées sans accent (« Ecole », « Etats-Unis »), l'apostrophe droite '
-  et les guillemets droits ".
+- Écris le français normalement, avec ses accents : l'écran affiche
+  à â ç é è ê ë î ï ô ù û, et en majuscule É et À.
+- Autres caractères disponibles : lettres, chiffres, ponctuation ordinaire,
+  et × « » … ◀ ▶ ▲ ▼. Tout autre caractère s'affiche « ? » : écris donc les
+  autres majuscules accentuées sans accent (« Ecole », « Etats-Unis »),
+  l'apostrophe droite ' et les guillemets droits ".
 - Les formules s'écrivent en texte, comme on les tape sur une calculatrice :
   x^2, racine(x), 3*4, 2/3, pi, e^x, f'(x), ln(x), sin(x), <=, >=, !=.
 - Pour une liste, un tiret « - » en début de ligne et un point court par

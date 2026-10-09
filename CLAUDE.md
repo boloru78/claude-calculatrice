@@ -161,10 +161,19 @@ Compiler le firmware sans l'IDE (≈ 2 min 30) :
   par l'auteur ; c'était 30 min). `conversation.txt` et Bonjour testés.
 - Firmware : **téléversé** le 08/10/2026 sur la carte de l'auteur (ESP32-C5,
   Wi-Fi 6 bi-bande), `secrets.h` rempli (code secret, adresse locale du
-  Mac, adresse Funnel ; pas de Wi-Fi). Testé par USB : `PING` répond,
-  `SCAN` voit le Wi-Fi de la maison (-58 dBm, WPA). **Aucun réseau retenu
-  encore** : à faire avec `esp32-c5/wifi.py`. La mini-API répond par
-  Funnel (`/etat` → OK, faux code → 403).
+  Mac, adresse Funnel ; pas de Wi-Fi dans `secrets.h`). Testé par USB :
+  connecté au Wi-Fi de la maison avec `wifi.py` (retenu), compte rendu en
+  5 s (Internet oui, Mac trouvé par Bonjour) ; passage par Funnel en HTTPS
+  vérifié (mini-API coupée : 502, sans plantage) ; **vraie question à
+  Claude par l'ESP32 : réponse en 5 s**. La mini-API répond par Funnel
+  (`/etat` → OK, faux code → 403).
+- Énigme : la toute première connexion avec `wifi.py` n'a pas eu de compte
+  rendu en 60 s (l'ESP32 était pourtant connecté, et avait redémarré). Non
+  reproduit. L'ESP32 affiche maintenant la raison de son démarrage
+  (« PLANTAGE… », « tension trop faible… ») et `wifi.py` montre ses
+  messages : regarder ça si ça recommence.
+- `consignes.md` : Claude écrivait sans accents (« lettres sans accent »
+  mal compris) ; corrigé, il écrit « reçois ».
 - Pas encore de câble jack : la calculatrice ne peut pas parler à l'ESP32
   (l'auteur a cru qu'ils se trouveraient par USB : expliqué).
 - App 1.1.0 (menu Wi-Fi) : 742 vérifications, tous les écrans dans le
@@ -177,9 +186,8 @@ Compiler le firmware sans l'IDE (≈ 2 min 30) :
 
 ## Prochaines étapes
 
-1. Connecter l'ESP32 au Wi-Fi (`esp32-c5/wifi.py`), puis tester `Q …`
-   par USB, par le réseau local et par Funnel (partage de connexion du
-   téléphone).
+1. Tester par Funnel depuis un autre réseau (partage de connexion du
+   téléphone : `wifi.py`, puis une question).
 2. Essayer l'app sur la calculatrice sans l'ESP32 : démarrage, clavier
    visuel, menu, aide, MENU puis retour, SHIFT puis AC/ON, et la croix du
    Wi-Fi (chaque demande d'état sans réponse fige l'écran 0,6 s).

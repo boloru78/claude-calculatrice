@@ -51,6 +51,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <esp_eap_client.h>
+#include <esp_system.h>
 #include <esp_wifi.h>
 #include <time.h>
 
@@ -1002,6 +1003,23 @@ static void lire(Stream &entree, String &tampon)
 // Programme principal
 //---
 
+/* Pourquoi l'ESP32 a (re)démarré : utile si une commande reste sans
+ * réponse. */
+static char const *raison_demarrage(void)
+{
+    switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:  return "mise sous tension";
+    case ESP_RST_SW:       return "redémarrage demandé";
+    case ESP_RST_PANIC:    return "PLANTAGE (erreur du programme)";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:      return "PLANTAGE (programme bloqué)";
+    case ESP_RST_BROWNOUT: return "tension trop faible (alimentation USB ?)";
+    case ESP_RST_USB:      return "par l'USB (téléversement, moniteur série)";
+    default:               return "autre";
+    }
+}
+
 static String tampon_usb, tampon_calculatrice;
 
 void setup()
@@ -1015,6 +1033,7 @@ void setup()
     voyant(0, 0, 255);
     Serial.println();
     Serial.println("Claude sur la calculatrice : ESP32 prêt.");
+    Serial.printf("Démarrage : %s.\n", raison_demarrage());
     Serial.println("Commandes : PING, Q <question>, NOUV, SCAN, WIFI, WIFIC");
 
     /* Les réseaux sont retenus par nous (charger_reseaux), pas par le
