@@ -49,6 +49,17 @@ Trois parties, une par dossier (le README détaille tout) :
   Liaison calculatrice sur GPIO 4 (RX) et 5 (TX), 9600 bauds.
 - **Heure réglée par Internet** (NTP) via l'ESP32, fuseau
   `EST5EDT,M3.2.0,M11.1.0` (Montréal / Québec).
+- **Wi-Fi choisi depuis la calculatrice** (demandé par l'auteur : « tout
+  genre » de réseau) : menu EXIT → Wi-Fi, recherche (`SCAN`), connexion
+  (`WIFI`, `WIFIC` pour un réseau caché). Ouverts, OWE, WEP, WPA/WPA2/WPA3,
+  Entreprise PEAP/TTLS (nom d'utilisateur = identité, **certificat du
+  réseau non vérifié**). L'ESP32 retient les 5 derniers réseaux (NVS,
+  `Preferences`, en clair), se reconnecte seul, détecte les pages de
+  connexion web (impossibles à remplir) et retrouve la mini-API par Bonjour
+  (`dns-sd -R` lancé par `serveur.py`, service `_claudecalc._tcp`).
+  `secrets.h` : seul `MAC_CODE` est obligatoire.
+- **Conversation lisible sur le Mac** : `mac/conversation.txt` (exclu de
+  Git, droits 600), questions et réponses complètes.
 - **App de la calculatrice**, choisie par l'auteur :
   - en haut à gauche l'heure avec les secondes, en haut à droite l'icône
     Wi-Fi (4 barres selon le RSSI, × si l'ESP32 ne répond pas) ;
@@ -74,8 +85,15 @@ Trois parties, une par dossier (le README détaille tout) :
   de la calculatrice, anneau = émission, corps = masse, 3,3 V. À vérifier au
   multimètre avant de brancher.
 - **Protocole** calculatrice ↔ ESP32 (lignes UTF-8) : `PING` → `PONG <rssi>
-  <hh:mm:ss>` ; `Q <question>` → `ATT`, `R <ligne>`…, `FIN` ou `ERR <msg>` ;
-  `NOUV` → `OK`. Décrit dans `calculatrice/src/protocol.h` et le firmware.
+  <hh:mm:ss> <réseau>` ; `Q <question>` → `ATT`, `R <ligne>`…, `FIN` ou
+  `ERR <msg>` ; `NOUV` → `OK` ; `SCAN` → `W <n> <rssi> <O|W|P|E|X>[*] <nom>`…
+  `FIN` ; `WIFI <n>⇥<utilisateur>⇥<mdp>` et `WIFIC <sécu>⇥<nom>⇥…` → lignes
+  `R`, `FIN`. Décrit dans `calculatrice/src/protocol.h` et le firmware.
+- **Firmware** : 97 % de la partition par défaut (1,25 Mo). S'il grossit,
+  passer à « Huge APP ». Dans un `.ino`, les types doivent être définis
+  avant la première fonction (l'IDE génère les prototypes en tête).
+- **Menu de l'app** : 5 entrées au plus (une 6e ne tient pas en hauteur) ;
+  « État de la connexion » a été remplacé par « Wi-Fi ».
 - **Docker n'est pas installé** : l'add-in est compilé par la CI GitHub
   (`.github/workflows/build.yml`, artefact `Claude-g1a`). `gh` est installé
   et connecté (compte boloru78). Pillow est dans
@@ -116,18 +134,22 @@ Compiler le firmware sans l'IDE (≈ 2 min 30) :
   projet (exclu de Git). Délai d'inactivité de Claude Code ramené à 15 min.
   Dépôt GitHub public créé avec la CI (tests + add-in) ; première
   compilation de `Claude.g1a` réussie du premier coup, copié sur la
-  calculatrice.
+  calculatrice. Puis : conversation dans `mac/conversation.txt`, Bonjour,
+  menu Wi-Fi (app 1.1.0, firmware), clavier avec tout l'ASCII.
 
 ## État actuel (08/10/2026)
 
-- Mini-API : fonctionne sur le Mac. Claude Code s'arrête après 15 min sans
-  question (`INACTIVITE_MAX`, choisi par l'auteur ; c'était 30 min).
-- Firmware : compile, **pas encore téléversé** sur la carte.
-- App : dépôt public
+- Mini-API : fonctionne sur le Mac (testée avec un faux `claude`).
+  Claude Code s'arrête après 15 min sans question (`INACTIVITE_MAX`, choisi
+  par l'auteur ; c'était 30 min). `conversation.txt` et Bonjour testés.
+- Firmware : compile sans avertissement avec le Wi-Fi, **pas encore
+  téléversé**. L'auteur a une carte ESP32 Espressif (vue en USB sur
+  `/dev/cu.usbmodem14101`).
+- App 1.1.0 (menu Wi-Fi) : 742 vérifications, tous les écrans dans le
+  simulateur, compilée par la CI (76 Ko). Dépôt public
   [boloru78/claude-calculatrice](https://github.com/boloru78/claude-calculatrice)
-  (licence MIT), la CI compile `Claude.g1a` (72 Ko). **Copié sur la
-  calculatrice le 08/10/2026, pas encore essayé** (sans l'ESP32, l'app doit
-  démarrer et afficher la croix du Wi-Fi).
+  (licence MIT). La 1.0.0 a été copiée sur la calculatrice le 08/10/2026 ;
+  la 1.1.0 attend que la calculatrice soit branchée (mode USB Flash).
 - `gh` a maintenant la permission « workflow » (la CI du Tetris peut être
   envoyée).
 
