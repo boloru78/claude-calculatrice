@@ -983,19 +983,50 @@ static void traiter(Stream &sortie, String ligne)
     voyant_etat();
 }
 
-/* Lit les caractères disponibles et traite chaque ligne complète. */
-static void lire(Stream &entree, String &tampon)
+/* Montre sur le port USB ce que la calculatrice envoie, pour vérifier le
+ * câble : les octets illisibles (mauvaise vitesse, fils inversés…)
+ * apparaissent en « \xNN ». Les identifiants Wi-Fi sont masqués. */
+static void journal_calculatrice(String const &ligne, bool incomplete)
 {
+    String s = ligne;
+    if (s.startsWith("WIFI") && s.indexOf('\t') >= 0)
+        s = s.substring(0, s.indexOf('\t')) + " (identifiants masqués)";
+    Serial.print(incomplete ? "Calculatrice (sans fin de ligne) > "
+                            : "Calculatrice > ");
+    for (unsigned i = 0; i < s.length(); i++) {
+        uint8_t c = s[i];
+        if (c < 0x20 || c == 0x7f)
+            Serial.printf("\\x%02X", c);
+        else
+            Serial.write(c);
+    }
+    Serial.println();
+}
+
+/* Lit les caractères disponibles et traite chaque ligne complète. Avec
+ * [journal], les lignes reçues sont aussi montrées sur le port USB, et un
+ * début de ligne resté seul 2 s est montré puis oublié. */
+static void lire(Stream &entree, String &tampon, bool journal)
+{
+    static uint32_t dernier_octet;
     while (entree.available()) {
         char c = entree.read();
+        if (journal)
+            dernier_octet = millis();
         if (c == '\r')
             continue;
         if (c == '\n') {
+            if (journal)
+                journal_calculatrice(tampon, false);
             traiter(entree, tampon);
             tampon = "";
         } else if (tampon.length() < LONGUEUR_MAX_LIGNE) {
             tampon += c;
         }
+    }
+    if (journal && tampon.length() && millis() - dernier_octet > 2000) {
+        journal_calculatrice(tampon, true);
+        tampon = "";
     }
 }
 
@@ -1059,7 +1090,7 @@ void loop()
 {
     suivre_wifi();
     auto_etape();
-    lire(Serial, tampon_usb);
-    lire(Calculatrice, tampon_calculatrice);
+    lire(Serial, tampon_usb, false);
+    lire(Calculatrice, tampon_calculatrice, true);
     delay(5);
 }
