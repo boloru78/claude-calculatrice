@@ -50,9 +50,11 @@
 #include <NetworkClientSecure.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <driver/gpio.h>
 #include <esp_eap_client.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
+#include <hal/gpio_ll.h>
 #include <time.h>
 
 #if __has_include("secrets.h")
@@ -68,11 +70,14 @@
 // Réglages
 //---
 
-/* Liaison avec la calculatrice (port 3 broches, jack 2,5 mm, 3,3 V) :
+/* Liaison avec la calculatrice (port 3 broches, jack 2,5 mm) :
  *   pointe du jack (réception de la calculatrice)  <- GPIO 5 (TX de l'ESP32)
  *   anneau du jack (émission de la calculatrice)   -> GPIO 4 (RX de l'ESP32)
  *   corps du jack (masse)                          -- GND
- * À vérifier au multimètre avant de brancher. */
+ * Mesuré sur la fx-9750GIII de l'auteur : 2,2 V au repos sur l'anneau, et
+ * non 3,3 V. La sortie GPIO 5 est donc en « drain ouvert » : l'ESP32 tire
+ * la ligne à 0 V, et sa résistance interne (≈ 45 kΩ) la remonte, sans
+ * jamais imposer 3,3 V à l'entrée de la calculatrice (voir setup()). */
 #define CALC_RX 4
 #define CALC_TX 5
 #define CALC_VITESSE 9600  // bauds ; à accorder avec l'app de la calculatrice
@@ -1058,6 +1063,11 @@ void setup()
     Serial.begin(USB_VITESSE);
     Calculatrice.setRxBufferSize(2048);
     Calculatrice.begin(CALC_VITESSE, SERIAL_8N1, CALC_RX, CALC_TX);
+    /* Drain ouvert sur la sortie vers la calculatrice (voir CALC_TX) : on ne
+     * touche qu'au réglage électrique de la broche, pas à son lien avec
+     * l'UART. */
+    gpio_pullup_en((gpio_num_t)CALC_TX);
+    gpio_ll_od_enable(&GPIO, CALC_TX);
     tampon_usb.reserve(LONGUEUR_MAX_LIGNE);
     tampon_calculatrice.reserve(LONGUEUR_MAX_LIGNE);
 
@@ -1083,6 +1093,9 @@ void setup()
 
     charger_reseaux();
     Serial.printf("%d réseau(x) retenu(s).\n", nb_reseaux);
+    Serial.printf("Liaison calculatrice : %d bauds, sortie GPIO %d en %s.\n",
+        CALC_VITESSE, CALC_TX,
+        GPIO.pin[CALC_TX].pad_driver ? "drain ouvert" : "PUSH-PULL (3,3 V)");
     auto_relancer();
 }
 
