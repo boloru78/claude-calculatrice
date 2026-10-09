@@ -199,6 +199,27 @@ void gfx_text_at(int x, int y, char const *text, int color, int align)
     gfx_text(aligned_x(x, text, align), y, text, color);
 }
 
+void gfx_fit(char *dst, size_t size, char const *src, int max_width)
+{
+    size_t len = strlen(src);
+    if (len < size && gfx_text_width(src) <= max_width) {
+        memcpy(dst, src, len + 1);
+        return;
+    }
+    /* On garde le plus de caractères possible avant « … » (3 octets). */
+    int ellipsis = gfx_text_width("…") + 1;
+    size_t n = 0;
+    while (src[n]) {
+        size_t c = gfx_utf8_length(src + n);
+        if (n + c + 4 > size
+                || gfx_text_width_n(src, n + c) + ellipsis > max_width)
+            break;
+        n += c;
+    }
+    memcpy(dst, src, n);
+    memcpy(dst + n, "…", 4);
+}
+
 void gfx_text_bold_at(int x, int y, char const *text, int color, int align)
 {
     x = aligned_x(x, text, align);

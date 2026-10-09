@@ -34,6 +34,11 @@ int ui_dialog(char const *title, char const *const *lines, int line_count,
     char const *const *items, int item_count, int selected,
     ui_background_t background, void const *context);
 
+/* Affiche une boîte de dialogue sans choix ni attente, par exemple avant
+ * un échange avec l'ESP32 (l'écran reste figé pendant l'échange). */
+void ui_box(char const *title, char const *const *lines, int line_count,
+    ui_background_t background, void const *context);
+
 /* Demande une confirmation. Renvoie vrai si le joueur accepte. */
 bool ui_confirm(char const *title, char const *line1, char const *line2,
     char const *yes, char const *no, ui_background_t background,

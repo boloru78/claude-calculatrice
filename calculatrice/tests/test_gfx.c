@@ -72,5 +72,18 @@ void test_gfx(void)
     CHECK(gfx_text_clipped > before);
     gfx_text_clipped = before;
 
+    /* Texte raccourci avec « … » (3 octets en UTF-8). */
+    char out[16];
+    gfx_fit(out, sizeof out, "court", 100);
+    CHECK(!strcmp(out, "court"));
+    gfx_fit(out, sizeof out, "un nom beaucoup trop long", 40);
+    size_t n = strlen(out);
+    CHECK(gfx_text_width(out) <= 40 && n >= 3 && !strcmp(out + n - 3, "…"));
+    gfx_fit(out, 8, "abcdefghij", 200);
+    CHECK(!strcmp(out, "abcd…"));
+    /* 9 « é » font 18 octets : 6, puis « … », tiennent dans 16. */
+    gfx_fit(out, sizeof out, "ééééééééé", 200);
+    CHECK(!strcmp(out, "éééééé…"));
+
     check_help_fits();
 }

@@ -46,11 +46,22 @@ void protocol_question(char *line, size_t size, char const *question)
     }
 }
 
-/* « PONG <rssi> <hh:mm:ss> », chaque valeur pouvant valoir « - ». */
-static void parse_status(char const *line, reply_t *r)
+/* Copie [src] dans [dst] (de taille [size]) sans couper un caractère. */
+static void copy(char *dst, size_t size, char const *src, size_t len)
 {
+    dst[0] = 0;
+    append(dst, size, src, len);
+}
+
+/* « PONG <rssi> <hh:mm:ss> <réseau> », chaque valeur pouvant valoir « - »,
+ * le réseau pouvant manquer. [len] : longueur de la ligne. */
+static void parse_status(char const *raw, size_t len, reply_t *r)
+{
+    char line[80];
+    snprintf(line, sizeof line, "%.*s", (int)len, raw);
     char rssi[16] = "", time[16] = "";
-    sscanf(line, "PONG %15s %15s", rssi, time);
+    int end = 0;
+    sscanf(line, "PONG %15s %15s%n", rssi, time, &end);
 
     if (rssi[0] && strcmp(rssi, "-") != 0) {
         char *end;
@@ -70,11 +81,16 @@ static void parse_status(char const *line, reply_t *r)
         r->minutes = m;
         r->seconds = s;
     }
+
+    /* Le nom du réseau, après une espace (il peut en contenir). */
+    if (end > 0 && line[end] == ' ' && r->wifi)
+        copy(r->ssid, sizeof r->ssid, line + end + 1, strlen(line + end + 1));
 }
 
 reply_t protocol_parse(char const *raw, char *text, size_t size)
 {
-    reply_t r = { REPLY_INVALID, false, 0, false, 0, 0, 0 };
+    reply_t r = { 0 };
+    r.kind = REPLY_INVALID;
     if (size > 0)
         text[0] = 0;
     bool first_line = true;
@@ -99,7 +115,7 @@ reply_t protocol_parse(char const *raw, char *text, size_t size)
             return r;
         } else if (starts_with(line, "PONG")) {
             r.kind = REPLY_STATUS;
-            parse_status(line, &r);
+            parse_status(raw, len, &r);
             return r;
         } else if (starts_with(line, "ERR")) {
             r.kind = REPLY_ERROR;
@@ -122,4 +138,104 @@ int protocol_wifi_bars(int rssi)
     if (rssi >= -75) return 2;
     if (rssi >= -85) return 1;
     return 0;
+}
+
+//---
+// Wi-Fi
+//---
+
+static wifi_security_t security_from(char c)
+{
+    switch (c) {
+    case 'O': return WIFI_OPEN;
+    case 'W': return WIFI_WEP;
+    case 'P': return WIFI_PASSWORD;
+    case 'E': return WIFI_ENTERPRISE;
+    default:  return WIFI_UNSUPPORTED;
+    }
+}
+
+/* « W <n> <rssi> <sécurité>[*] <nom> ». [len] : longueur de la ligne. */
+static bool parse_network(char const *raw, size_t len, wifi_network_t *n)
+{
+    char line[96];
+    snprintf(line, sizeof line, "%.*s", (int)len, raw);
+    char security[4];
+    int end = 0;
+    if (sscanf(line, "W %d %d %3s%n", &n->number, &n->rssi, security, &end)
+            != 3 || end == 0 || n->number < 1)
+        return false;
+    n->security = security_from(security[0]);
+    n->saved = security[1] == '*';
+    /* Le nom suit une seule espace : il peut commencer par des espaces. */
+    char const *ssid = line[end] == ' ' ? line + end + 1 : line + end;
+    copy(n->ssid, sizeof n->ssid, ssid, strlen(ssid));
+    return true;
+}
+
+int protocol_networks(char const *raw, wifi_network_t *list, int max)
+{
+    int count = 0;
+    while (*raw && count < max) {
+        char const *end = strchr(raw, '\n');
+        size_t len = end ? (size_t)(end - raw) : strlen(raw);
+        if (len >= 2 && raw[0] == 'W' && raw[1] == ' '
+                && parse_network(raw, len, &list[count]))
+            count++;
+        raw += len + (end ? 1 : 0);
+    }
+    return count;
+}
+
+/* Ajoute [text] en entier à [line], ou renvoie faux s'il ne tient pas.
+ * Pour un champ ([field] vrai), une tabulation le précède, et celles qu'il
+ * contient deviennent des espaces, comme les retours à la ligne : elles
+ * casseraient la requête. */
+static bool add(char *line, size_t size, char const *text, bool field)
+{
+    size_t used = strlen(line), n = strlen(text) + (field ? 1 : 0);
+    if (used + n + 1 > size)
+        return false;
+    if (field)
+        line[used++] = '\t';
+    for (; *text; text++) {
+        char c = *text;
+        bool bad = field && (c == '\t' || c == '\n' || c == '\r');
+        line[used++] = bad ? ' ' : c;
+    }
+    line[used] = 0;
+    return true;
+}
+
+/* Ajoute les champs non NULL. */
+static bool add_credentials(char *line, size_t size, char const *user,
+    char const *password)
+{
+    return (!user || add(line, size, user, true))
+        && (!password || add(line, size, password, true));
+}
+
+bool protocol_wifi(char *line, size_t size, int number, char const *user,
+    char const *password)
+{
+    if (size == 0)
+        return false;
+    char start[24];
+    snprintf(start, sizeof start, "WIFI %d", number);
+    line[0] = 0;
+    return add(line, size, start, false)
+        && add_credentials(line, size, user, password);
+}
+
+bool protocol_wifi_hidden(char *line, size_t size, wifi_security_t security,
+    char const *ssid, char const *user, char const *password)
+{
+    static char const LETTERS[] = "OWPEX";
+    if (size == 0)
+        return false;
+    char start[] = "WIFIC ?";
+    start[6] = LETTERS[security];
+    line[0] = 0;
+    return add(line, size, start, false) && add(line, size, ssid, true)
+        && add_credentials(line, size, user, password);
 }

@@ -53,6 +53,10 @@ int gfx_text_width_n(char const *text, size_t len);
 int gfx_utf8_length(char const *text);
 void gfx_text_at(int x, int y, char const *text, int color, int align);
 
+/* Copie [src] dans [dst] (de taille [size], au moins 4), raccourci avec
+ * « … » s'il est plus large que [max_width] pixels ou trop long. */
+void gfx_fit(char *dst, size_t size, char const *src, int max_width);
+
 /* Texte en gras (dessiné deux fois, décalé d'un pixel). */
 void gfx_text_bold_at(int x, int y, char const *text, int color, int align);
 

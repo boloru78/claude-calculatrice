@@ -49,8 +49,9 @@ static int max_width(char const *const *texts, int count)
     return width;
 }
 
-int ui_dialog(char const *title, char const *const *lines, int line_count,
-    char const *const *items, int item_count, int selected,
+/* Dessine une boîte de dialogue (sans l'afficher). */
+static void draw_dialog(char const *title, char const *const *lines,
+    int line_count, char const *const *items, int item_count, int selected,
     ui_background_t background, void const *context)
 {
     /* Dimensions de la boîte d'après son contenu. */
@@ -70,28 +71,36 @@ int ui_dialog(char const *title, char const *const *lines, int line_count,
     int x1 = (GFX_WIDTH - width) / 2, x2 = x1 + width - 1;
     int y1 = (GFX_HEIGHT - height) / 2, y2 = y1 + height - 1;
 
-    for (;;) {
-        gfx_clear();
-        if (background)
-            background(context);
+    gfx_clear();
+    if (background)
+        background(context);
 
-        /* Ombre, fond et contour. */
-        gfx_rect(x1 + 1, y1 + 1, x2 + 1, y2 + 1, GFX_BLACK);
-        gfx_rect(x1, y1, x2, y2, GFX_WHITE);
-        gfx_frame(x1, y1, x2, y2, GFX_BLACK);
+    /* Ombre, fond et contour. */
+    gfx_rect(x1 + 1, y1 + 1, x2 + 1, y2 + 1, GFX_BLACK);
+    gfx_rect(x1, y1, x2, y2, GFX_WHITE);
+    gfx_frame(x1, y1, x2, y2, GFX_BLACK);
 
-        int y = y1 + 2;
-        gfx_text_at((x1 + x2) / 2, y, title, GFX_BLACK, ALIGN_CENTER);
-        y += FONT_HEIGHT + 2;
-        gfx_rect(x1 + 2, y, x2 - 2, y, GFX_BLACK);
+    int y = y1 + 2;
+    gfx_text_at((x1 + x2) / 2, y, title, GFX_BLACK, ALIGN_CENTER);
+    y += FONT_HEIGHT + 2;
+    gfx_rect(x1 + 2, y, x2 - 2, y, GFX_BLACK);
+    y += 2;
+
+    for (int i = 0; i < line_count; i++, y += FONT_HEIGHT + 1)
+        gfx_text_at((x1 + x2) / 2, y, lines[i], GFX_BLACK, ALIGN_CENTER);
+    if (line_count > 0)
         y += 2;
 
-        for (int i = 0; i < line_count; i++, y += FONT_HEIGHT + 1)
-            gfx_text_at((x1 + x2) / 2, y, lines[i], GFX_BLACK, ALIGN_CENTER);
-        if (line_count > 0)
-            y += 2;
+    ui_items(x1 + 2, x2 - 2, y + 1, items, item_count, selected);
+}
 
-        ui_items(x1 + 2, x2 - 2, y + 1, items, item_count, selected);
+int ui_dialog(char const *title, char const *const *lines, int line_count,
+    char const *const *items, int item_count, int selected,
+    ui_background_t background, void const *context)
+{
+    for (;;) {
+        draw_dialog(title, lines, line_count, items, item_count, selected,
+            background, context);
         gfx_present();
 
         input_t key = pf_getkey(false);
@@ -104,6 +113,13 @@ int ui_dialog(char const *title, char const *const *lines, int line_count,
             break;
         }
     }
+}
+
+void ui_box(char const *title, char const *const *lines, int line_count,
+    ui_background_t background, void const *context)
+{
+    draw_dialog(title, lines, line_count, NULL, 0, -1, background, context);
+    gfx_present();
 }
 
 bool ui_confirm(char const *title, char const *line1, char const *line2,

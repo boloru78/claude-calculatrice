@@ -156,3 +156,25 @@ static uint32_t const rows_key_enter[] = {
     0x20000000, /* ..#.... */
 };
 sprite_t const SPR_KEY_ENTER = { 7, 7, rows_key_enter };
+
+static uint32_t const rows_wifi_lock[] = {
+    0x70000000, /* .###. */
+    0x88000000, /* #...# */
+    0x88000000, /* #...# */
+    0xf8000000, /* ##### */
+    0xd8000000, /* ##.## */
+    0xd8000000, /* ##.## */
+    0xf8000000, /* ##### */
+};
+sprite_t const SPR_WIFI_LOCK = { 5, 7, rows_wifi_lock };
+
+static uint32_t const rows_wifi_user[] = {
+    0x70000000, /* .###. */
+    0x70000000, /* .###. */
+    0x70000000, /* .###. */
+    0x00000000, /* ..... */
+    0xf8000000, /* ##### */
+    0xf8000000, /* ##### */
+    0xf8000000, /* ##### */
+};
+sprite_t const SPR_WIFI_USER = { 5, 7, rows_wifi_user };

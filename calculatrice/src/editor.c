@@ -8,12 +8,18 @@ void editor_clear(editor_t *e)
     e->text[0] = 0;
     e->len = 0;
     e->cursor = 0;
+    e->limit = EDITOR_MAX;
+}
+
+void editor_set_limit(editor_t *e, size_t limit)
+{
+    e->limit = limit < EDITOR_MAX ? limit : EDITOR_MAX;
 }
 
 bool editor_insert(editor_t *e, char const *s)
 {
     size_t n = strlen(s);
-    if (e->len + n > EDITOR_MAX)
+    if (e->len + n > e->limit)
         return false;
     memmove(e->text + e->cursor + n, e->text + e->cursor,
         e->len - e->cursor + 1);

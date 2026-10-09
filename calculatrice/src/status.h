@@ -17,6 +17,7 @@ typedef struct {
     bool esp_ok;           /* l'ESP32 a répondu à la dernière demande */
     bool wifi;             /* l'ESP32 est connecté au Wi-Fi */
     int rssi;              /* force du signal, en dBm */
+    char ssid[WIFI_SSID_MAX + 1]; /* nom du réseau (vide si inconnu) */
     bool has_time;         /* l'heure a été reçue au moins une fois */
     uint32_t time_ref_ms;  /* moment de la réception de l'heure… */
     uint32_t seconds_ref;  /* …et heure reçue, en secondes depuis minuit */
@@ -39,5 +40,9 @@ void status_time(status_t const *s, uint32_t now_ms, char *buffer);
 
 /* Dessine la barre d'état (heure, titre, icône Wi-Fi) en haut de l'écran. */
 void status_draw(status_t const *s, uint32_t now_ms, char const *title);
+
+/* Icône de force du signal : 4 barres (11 × 7 pixels), dont [bars] pleines,
+ * coin en haut à gauche en (x, y). */
+void status_draw_bars(int x, int y, int bars);
 
 #endif /* STATUS_H */

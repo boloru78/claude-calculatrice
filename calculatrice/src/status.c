@@ -2,6 +2,7 @@
 #include "status.h"
 #include "gfx.h"
 #include <stdio.h>
+#include <string.h>
 
 #define SECONDS_PER_DAY 86400u
 
@@ -23,10 +24,13 @@ void status_update(status_t *s, bool replied, reply_t const *r,
     s->esp_ok = replied && r->kind == REPLY_STATUS;
     if (!s->esp_ok) {
         s->wifi = false;
+        s->ssid[0] = 0;
         return;
     }
     s->wifi = r->wifi;
     s->rssi = r->rssi;
+    memcpy(s->ssid, r->ssid, sizeof s->ssid);
+    s->ssid[sizeof s->ssid - 1] = 0;
     if (r->has_time) {
         s->has_time = true;
         s->time_ref_ms = now_ms;
@@ -46,22 +50,25 @@ void status_time(status_t const *s, uint32_t now_ms, char *buffer)
         (unsigned)(t / 60 % 60), (unsigned)(t % 60));
 }
 
-/* Icône Wi-Fi : 4 barres de hauteur croissante (11 × 7 pixels), pleines
- * selon la force du signal. Sans Wi-Fi, seulement leur pied ; sans réponse
- * de l'ESP32, une croix. */
+void status_draw_bars(int x, int y, int bars)
+{
+    static int const HEIGHTS[4] = { 2, 3, 5, 7 };
+    for (int i = 0; i < 4; i++) {
+        int bx = x + i * 3;
+        int top = i < bars ? 7 - HEIGHTS[i] : 6;
+        gfx_rect(bx, y + top, bx + 1, y + 6, GFX_BLACK);
+    }
+}
+
+/* Icône Wi-Fi : les barres pleines selon la force du signal. Sans Wi-Fi,
+ * seulement leur pied ; sans réponse de l'ESP32, une croix. */
 static void draw_wifi(status_t const *s, int x)
 {
     if (s->polled && !s->esp_ok) {
         gfx_text_at(x + 10, 0, "×", GFX_BLACK, ALIGN_RIGHT);
         return;
     }
-    static int const HEIGHTS[4] = { 2, 3, 5, 7 };
-    int bars = s->wifi ? protocol_wifi_bars(s->rssi) : 0;
-    for (int i = 0; i < 4; i++) {
-        int bx = x + i * 3;
-        int top = i < bars ? 7 - HEIGHTS[i] : 6;
-        gfx_rect(bx, top, bx + 1, 6, GFX_BLACK);
-    }
+    status_draw_bars(x, 0, s->wifi ? protocol_wifi_bars(s->rssi) : 0);
 }
 
 void status_draw(status_t const *s, uint32_t now_ms, char const *title)

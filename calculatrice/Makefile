@@ -18,7 +18,8 @@ CFLAGS += -std=c11 -Wall -Wextra -Werror -Isrc -Isim -D_DEFAULT_SOURCE
 SANITIZE ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 
 APP_SRC := src/app.c src/assets.c src/chat.c src/editor.c src/gfx.c \
-           src/help.c src/keyboard.c src/protocol.c src/status.c src/ui.c
+           src/help.c src/keyboard.c src/protocol.c src/status.c src/ui.c \
+           src/wifi.c
 SIM_SRC := sim/main_sim.c sim/platform_sim.c
 TEST_SRC := tests/test_main.c tests/test_protocol.c tests/test_chat.c \
             tests/test_keyboard.c tests/test_gfx.c sim/platform_sim.c

@@ -32,5 +32,7 @@ extern int const FONT_GLYPH_COUNT;
 extern sprite_t const SPR_KEY_SHIFT;
 extern sprite_t const SPR_KEY_BACKSPACE;
 extern sprite_t const SPR_KEY_ENTER;
+extern sprite_t const SPR_WIFI_LOCK;
+extern sprite_t const SPR_WIFI_USER;
 
 #endif /* ASSETS_H */

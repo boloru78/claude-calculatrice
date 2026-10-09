@@ -5,8 +5,10 @@
  *   lettres          chiffres          accents
  *   q w e r t y u i o p   1 2 3 4 5 6 7 8 9 0   é è ê ë à â ù û ô î
  *   a s d f g h j k l '   + - * / = ( ) ^ < >   ï ç « » … _ [ ] { }
- *   ⇧ z x c v b n m ? ⌫   , ; : ! % " # @ & ⌫   ⇧ ( ) ' " - ! ? , ⌫
+ *   ⇧ z x c v b n m ? ⌫   , ; : ! % " # @ & ⌫   ⇧ $ ~ | \ ` ' ? , ⌫
  *   123 ◀ espace ▶ . ↵    éà ◀ espace ▶ . ↵     abc ◀ espace ▶ . ↵
+ *
+ * Tous les caractères ASCII imprimables y sont (mots de passe Wi-Fi).
  *
  * ⇧ met la lettre suivante en majuscule ; deux appuis verrouillent les
  * majuscules. La première touche de la dernière rangée passe à la page

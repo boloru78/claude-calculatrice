@@ -37,8 +37,9 @@ static kb_key_t const PAGES[KB_PAGE_COUNT][3][KB_UNITS] = {
           K("ù"), K("û"), K("ô"), K("î") },
         { K("ï"), K("ç"), K("«"), K("»"), K("…"), K("_"), K("["), K("]"),
           K("{"), K("}") },
-        { SPECIAL(KBK_SHIFT), K("("), K(")"), K("'"), K("\""), K("-"),
-          K("!"), K("?"), K(","), SPECIAL(KBK_BACKSPACE) },
+        /* Les derniers symboles ASCII, utiles pour les mots de passe. */
+        { SPECIAL(KBK_SHIFT), K("$"), K("~"), K("|"), K("\\"), K("`"),
+          K("'"), K("?"), K(","), SPECIAL(KBK_BACKSPACE) },
     },
 };
 

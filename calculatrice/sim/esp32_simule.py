@@ -2,8 +2,9 @@
 """Faux ESP32 pour le simulateur : répond à une requête du protocole.
 
 Le simulateur l'appelle à chaque échange, avec la requête dans la variable
-d'environnement SIM_REQUETE (« PING », « Q <question> » ou « NOUV »), et lit
-les lignes de la réponse sur sa sortie. Le mode est choisi par SIM_ESP32 :
+d'environnement SIM_REQUETE (« PING », « Q <question> », « NOUV », « SCAN »,
+« WIFI … » ou « WIFIC … »), et lit les lignes de la réponse sur sa sortie.
+Le mode est choisi par SIM_ESP32 :
 
     faux      réponses toutes faites, toujours les mêmes (par défaut :
               captures d'écran et vérifications automatiques)
@@ -11,6 +12,9 @@ les lignes de la réponse sur sa sortie. Le mode est choisi par SIM_ESP32 :
               on discute vraiment avec Claude depuis l'app simulée
     sanswifi  l'ESP32 répond, mais n'a pas de Wi-Fi
     absent    l'ESP32 ne répond pas (câble débranché)
+
+Les réseaux Wi-Fi sont toujours les mêmes, inventés (RESEAUX) ; le mot de
+passe « mauvais » est refusé.
 """
 
 import datetime
@@ -30,6 +34,20 @@ REPONSES_FAUSSES = {
     "dérivée": "La dérivée mesure la pente d'une courbe en un point.\n"
                "- x^2 -> 2x\n- sin(x) -> cos(x)\n- e^x -> e^x",
 }
+
+
+# Réseaux « trouvés » par SCAN : force, sécurité (« * » : mot de passe
+# connu), nom.
+RESEAUX = [
+    (-48, "P*", "MaisonWifi"),
+    (-61, "E", "Ecole-Personnel"),
+    (-67, "O", "Cafe du coin"),
+    (-72, "P", "Voisin_5G"),
+    (-80, "X", "Labo-Securise"),
+    (-84, "W", "VieuxRouteur"),
+    (-88, "P", "Un nom de réseau bien trop long"),
+]
+RESEAU_ACTUEL = "MaisonWifi"
 
 
 def repondre(lignes):
@@ -59,6 +77,28 @@ def appeler_mac(chemin, texte):
         return -1, "Mac injoignable (serveur lancé ?)"
 
 
+def connexion_wifi(requete):
+    """Réponse à WIFI <n>⇥… ou WIFIC <sécurité>⇥<nom>⇥…"""
+    champs = requete.split(" ", 1)[1].split("\t")
+    if requete.startswith("WIFIC "):
+        nom = champs[1] if len(champs) > 1 else ""
+        identifiants = champs[2:]
+    else:
+        numero = int(champs[0]) if champs[0].isdigit() else 0
+        if not 1 <= numero <= len(RESEAUX):
+            return ["ERR Réseau inconnu : relance la recherche."]
+        _, secu, nom = RESEAUX[numero - 1]
+        identifiants = champs[1:]
+        if secu.startswith("X"):
+            return ["ERR Ce réseau demande un certificat : non pris en charge."]
+        if not identifiants and secu not in ("O", "P*"):
+            return ["ERR Mot de passe nécessaire."]
+    if "mauvais" in identifiants:
+        return ["ERR Mot de passe refusé."]
+    return [f"R Wi-Fi : connecté à {nom}.", "R Internet : oui.",
+            "R Mac : trouvé.", "FIN"]
+
+
 def main():
     mode = os.environ.get("SIM_ESP32", "faux")
     requete = os.environ.get("SIM_REQUETE", "")
@@ -69,9 +109,19 @@ def main():
         if mode == "sanswifi":
             repondre(["PONG - -"])
         elif mode == "mac":
-            repondre(["PONG -52 " + datetime.datetime.now().strftime("%H:%M:%S")])
+            repondre(["PONG -52 " + datetime.datetime.now().strftime("%H:%M:%S")
+                      + " " + RESEAU_ACTUEL])
         else:
-            repondre(["PONG -58 14:03:27"])
+            repondre(["PONG -58 14:03:27 " + RESEAU_ACTUEL])
+        return
+
+    if requete == "SCAN":
+        repondre(["ATT"] + [f"W {i} {rssi} {secu} {nom}" for i, (rssi, secu, nom)
+                            in enumerate(RESEAUX, 1)] + ["FIN"])
+        return
+
+    if requete.startswith(("WIFI ", "WIFIC ")):
+        repondre(["ATT"] + connexion_wifi(requete))
         return
 
     if mode == "sanswifi" and requete.startswith(("Q ", "NOUV")):

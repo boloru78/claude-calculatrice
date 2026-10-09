@@ -34,12 +34,35 @@ EXE                             # abc
 RIGHT DOWN LEFT DEL AC
 EXIT
 
-# Menu, état de la connexion, nouvelle conversation.
+# Menu, Wi-Fi, nouvelle conversation.
 EXIT
 SHOT:menu
-DOWN DOWN EXE                   # État de la connexion
-SHOT:connexion
+DOWN DOWN EXE                   # Wi-Fi
+SHOT:wifi
+EXE                             # Chercher les réseaux
+SHOT:reseaux
+DOWN EXE                        # Ecole-Personnel : nom d'utilisateur
+SHOT:wifi_utilisateur
+TEXTE:eleve@ecole.ca|
+SHOT:wifi_mot_de_passe
+TEXTE:mauvais|                  # refusé par le faux ESP32
+SHOT:wifi_refuse
+EXIT DOWN DOWN EXE EXE          # de nouveau la liste
+DOWN DOWN DOWN DOWN DOWN DOWN   # le dernier : défilement
+SHOT:reseaux_defilement
+UP UP UP UP UP UP               # MaisonWifi : mot de passe connu
 EXE
+SHOT:wifi_connu
+EXE                             # Se connecter
+SHOT:wifi_connecte
+EXIT DOWN DOWN EXE DOWN EXE     # Wi-Fi, réseau caché
+TEXTE:Garage|
+SHOT:wifi_securite
+EXE                             # Mot de passe
+TEXTE:secret123|
+EXIT DOWN DOWN EXE EXE DOWN DOWN DOWN DOWN EXE  # Labo-Securise
+SHOT:wifi_certificat
+EXE EXIT EXIT
 EXIT DOWN EXE                   # Nouvelle conversation
 SHOT:nouvelle
 

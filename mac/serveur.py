@@ -23,6 +23,10 @@ sur la calculatrice : 403 code faux ou appareil hors du réseau local,
 Sécurité : Claude est lancé sans aucun outil (il ne peut ni lire ni modifier
 de fichier, ni exécuter de commande), et seuls les appareils du réseau local
 qui connaissent le code secret sont acceptés.
+
+La conversation complète est notée dans conversation.txt (à ouvrir sur le
+Mac). Le serveur s'annonce aussi sur le réseau local (Bonjour, service
+_claudecalc._tcp) : l'ESP32 le retrouve même si l'adresse du Mac change.
 """
 
 import argparse
@@ -44,6 +48,8 @@ from calculatrice import adapter
 DOSSIER = pathlib.Path(__file__).resolve().parent
 CONSIGNES = DOSSIER / "consignes.md"
 CODE_SECRET = DOSSIER / "code-secret.txt"
+CONVERSATION = DOSSIER / "conversation.txt"  # la conversation, lisible sur le Mac
+SERVICE_BONJOUR = "_claudecalc._tcp"         # cherché par l'ESP32
 
 PORT = 8765
 TAILLE_MAX_QUESTION = 1000      # caractères
@@ -61,6 +67,44 @@ def resume(texte, n=60):
     """Début d'un texte, sur une ligne, pour le journal."""
     texte = " ".join(texte.split())
     return texte if len(texte) <= n else texte[:n - 1] + "…"
+
+
+verrou_conversation = threading.Lock()
+
+
+def noter(texte):
+    """Ajoute du texte à conversation.txt (lisible par ce compte seulement)."""
+    with verrou_conversation:
+        nouveau = not CONVERSATION.exists()
+        with open(CONVERSATION, "a", encoding="utf-8") as f:
+            f.write(texte)
+        if nouveau:
+            os.chmod(CONVERSATION, 0o600)
+
+
+def noter_titre(titre):
+    """« === Nouvelle conversation, 08/10/2026 à 18:55 === » dans le fichier."""
+    noter(f"\n=== {titre}, {datetime.datetime.now():%d/%m/%Y à %H:%M} ===\n\n")
+
+
+def noter_echange(question, reponse=None, erreur=None):
+    """Une question et sa réponse, comme sur la calculatrice."""
+    texte = f"[{datetime.datetime.now():%H:%M:%S}] > {question}\n"
+    texte += f"(erreur : {erreur})\n\n" if erreur else f"{reponse}\n\n"
+    noter(texte)
+
+
+def annoncer(port):
+    """Annonce la mini-API sur le réseau local avec Bonjour (commande dns-sd
+    de macOS). Renvoie le processus à arrêter à la fin, ou None."""
+    try:
+        return subprocess.Popen(
+            ["dns-sd", "-R", "Claude calculatrice", SERVICE_BONJOUR, "local",
+             str(port)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        journal("Bonjour indisponible : l'ESP32 utilisera l'adresse de secrets.h")
+        return None
 
 
 def lire_code_secret():
@@ -245,6 +289,7 @@ class Requete(http.server.BaseHTTPRequestHandler):
             with self.server.verrou:
                 self.server.claude.nouvelle_conversation()
             journal("nouvelle conversation")
+            noter_titre("Nouvelle conversation")
             self.repondre(200, "OK")
             return
 
@@ -276,9 +321,11 @@ class Requete(http.server.BaseHTTPRequestHandler):
                 reponse = adapter(self.server.claude.demander(question))
             except RuntimeError as erreur:
                 journal(f"erreur : {erreur}")
+                noter_echange(question, erreur=erreur)
                 self.repondre(503, str(erreur))
                 return
         journal(f"réponse en {time.time() - debut:.1f} s : {resume(reponse)}")
+        noter_echange(question, reponse or "(réponse vide)")
         self.repondre(200, reponse or "(réponse vide)")
 
 
@@ -303,9 +350,14 @@ def main():
     serveur = Serveur((args.hote, args.port), code, Claude(args.modele))
     threading.Thread(target=surveiller, args=(serveur,), daemon=True).start()
 
-    ip = adresse_locale() if args.hote == "0.0.0.0" else args.hote
+    reseau = args.hote == "0.0.0.0"
+    bonjour = annoncer(args.port) if reseau else None
+    noter_titre("Mini-API démarrée")
+
+    ip = adresse_locale() if reseau else args.hote
     print(f"Mini-API de la calculatrice : http://{ip}:{args.port}")
     print(f"Code secret : dans {CODE_SECRET.name} (à recopier dans secrets.h)")
+    print(f"Conversation : open {CONVERSATION}")
     print("Ctrl+C pour arrêter.", flush=True)
     try:
         serveur.serve_forever()
@@ -313,6 +365,8 @@ def main():
         print()
     finally:
         serveur.claude.arreter()
+        if bonjour:
+            bonjour.terminate()
         journal("serveur arrêté")
 
 

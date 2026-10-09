@@ -1,5 +1,6 @@
-# Secrets : ne jamais les publier
+# Secrets et conversations : ne jamais les publier
 mac/code-secret.txt
+mac/conversation.txt
 esp32-c5/claude_calculatrice/secrets.h
 
 # Les jeux (dépôts à part) et la sauvegarde de la calculatrice : pas ici

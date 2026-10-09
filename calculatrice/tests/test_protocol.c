@@ -79,11 +79,69 @@ static void check_status(void)
     r = protocol_parse("PONG -60x 1:2", text, sizeof text);
     CHECK(!r.wifi && !r.has_time);
 
+    /* Le nom du réseau, qui peut contenir des espaces. */
+    r = protocol_parse("PONG -63 14:03:27 Ma maison", text, sizeof text);
+    CHECK(r.wifi && !strcmp(r.ssid, "Ma maison"));
+    r = protocol_parse("PONG -63 14:03:27", text, sizeof text);
+    CHECK(r.wifi && !r.ssid[0]);
+    r = protocol_parse("PONG - - Fantome", text, sizeof text);
+    CHECK(!r.wifi && !r.ssid[0]);
+
     CHECK(protocol_wifi_bars(-40) == 4);
     CHECK(protocol_wifi_bars(-60) == 3);
     CHECK(protocol_wifi_bars(-70) == 2);
     CHECK(protocol_wifi_bars(-80) == 1);
     CHECK(protocol_wifi_bars(-95) == 0);
+}
+
+static void check_networks(void)
+{
+    wifi_network_t list[4];
+    int n = protocol_networks("ATT\nW 1 -48 P* Maison\nW 2 -61 E Ecole perso"
+        "\nW 3 -67 O  Espace\nW x\nR bizarre\nW 4 -90 X Labo\nFIN", list, 4);
+    CHECK(n == 4);
+    CHECK(list[0].number == 1 && list[0].rssi == -48);
+    CHECK(list[0].security == WIFI_PASSWORD && list[0].saved);
+    CHECK(!strcmp(list[0].ssid, "Maison"));
+    CHECK(list[1].security == WIFI_ENTERPRISE && !list[1].saved);
+    CHECK(!strcmp(list[1].ssid, "Ecole perso"));
+    /* Un nom peut commencer par une espace. */
+    CHECK(list[2].security == WIFI_OPEN && !strcmp(list[2].ssid, " Espace"));
+    CHECK(list[3].number == 4 && list[3].security == WIFI_UNSUPPORTED);
+
+    /* Pas plus de [max] réseaux. */
+    CHECK(protocol_networks("W 1 -1 O a\nW 2 -1 O b", list, 1) == 1);
+    /* Nom trop long : tronqué à 32 octets sans couper un caractère. */
+    n = protocol_networks("W 1 -50 W ééééééééééééééééééééé", list, 4);
+    CHECK(n == 1 && list[0].security == WIFI_WEP);
+    CHECK(strlen(list[0].ssid) == WIFI_SSID_MAX);
+}
+
+static void check_wifi_requests(void)
+{
+    char line[64];
+    CHECK(protocol_wifi(line, sizeof line, 3, NULL, NULL));
+    CHECK(!strcmp(line, "WIFI 3"));
+    /* Le mot de passe est gardé tel quel, espaces comprises. */
+    CHECK(protocol_wifi(line, sizeof line, 3, NULL, " mot de passe "));
+    CHECK(!strcmp(line, "WIFI 3\t mot de passe "));
+    /* Une tabulation dans un champ casserait la requête. */
+    CHECK(protocol_wifi(line, sizeof line, 12, "eleve@ecole.ca", "x\ty"));
+    CHECK(!strcmp(line, "WIFI 12\televe@ecole.ca\tx y"));
+
+    CHECK(protocol_wifi_hidden(line, sizeof line, WIFI_OPEN, "Libre", NULL,
+        NULL));
+    CHECK(!strcmp(line, "WIFIC O\tLibre"));
+    CHECK(protocol_wifi_hidden(line, sizeof line, WIFI_PASSWORD, "Cache",
+        NULL, "secret123"));
+    CHECK(!strcmp(line, "WIFIC P\tCache\tsecret123"));
+    CHECK(protocol_wifi_hidden(line, sizeof line, WIFI_ENTERPRISE, "Ecole",
+        "moi", "mdp"));
+    CHECK(!strcmp(line, "WIFIC E\tEcole\tmoi\tmdp"));
+
+    /* Trop long : refusé plutôt que tronqué. */
+    char small[12];
+    CHECK(!protocol_wifi(small, sizeof small, 1, NULL, "beaucoup trop long"));
 }
 
 void test_protocol(void)
@@ -92,4 +150,6 @@ void test_protocol(void)
     check_question();
     check_answer();
     check_status();
+    check_networks();
+    check_wifi_requests();
 }

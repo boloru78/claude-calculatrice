@@ -20,6 +20,7 @@
 #include "protocol.h"
 #include "status.h"
 #include "ui.h"
+#include "wifi.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +38,7 @@
 
 /* Tailles des tampons, alloués sur le tas au démarrage. */
 #define CHAT_SIZE 6000
-#define REPLY_SIZE 3000
+#define REPLY_SIZE APP_BUFFER_SIZE
 
 /* Délais d'attente de l'ESP32, en millisecondes. La mini-API abandonne une
  * question après 60 s. */
@@ -62,16 +63,36 @@ static bool waiting;      /* une question est en route */
 // Échanges avec l'ESP32
 //---
 
-/* Demande l'état (Wi-Fi, heure) à l'ESP32. */
-static void poll_status(void)
+void app_poll_status(void)
 {
-    char buffer[64], text[2];
+    char buffer[80], text[2];
     reply_t r = { 0 };
     bool replied = pf_link_exchange(PROTOCOL_PING, buffer, sizeof buffer,
         PING_TIMEOUT_MS);
     if (replied)
         r = protocol_parse(buffer, text, sizeof text);
     status_update(&status, replied, &r, pf_time_ms());
+}
+
+status_t const *app_status(void)
+{
+    return &status;
+}
+
+char *app_raw(void)
+{
+    return raw;
+}
+
+char *app_text(void)
+{
+    return reply_text;
+}
+
+void app_info(char const *text)
+{
+    chat_add(&chat, CHAT_INFO, text);
+    follow = true;
 }
 
 static void add_info(char const *format, char const *detail)
@@ -126,29 +147,30 @@ static void draw_chat(void)
     }
 }
 
-/* Texte de la barre de saisie entre [x1] et [x2], curseur visible. */
-static void draw_editor(int x1, int x2, int y, bool cursor)
+/* Texte de [e] entre [x1] et [x2], curseur visible. */
+static void draw_editor(editor_t const *e, int x1, int x2, int y,
+    bool cursor)
 {
     int width = x2 - x1 - 2;
     /* Premier caractère affiché : le curseur doit rester visible. */
     size_t start = 0;
-    while (start < editor.cursor && gfx_text_width_n(editor.text + start,
-            editor.cursor - start) > width)
-        start += gfx_utf8_length(editor.text + start);
+    while (start < e->cursor && gfx_text_width_n(e->text + start,
+            e->cursor - start) > width)
+        start += gfx_utf8_length(e->text + start);
 
     /* On n'affiche que ce qui tient. */
     size_t end = start;
-    while (end < editor.len) {
-        size_t n = gfx_utf8_length(editor.text + end);
-        if (gfx_text_width_n(editor.text + start, end + n - start) > width)
+    while (end < e->len) {
+        size_t n = gfx_utf8_length(e->text + end);
+        if (gfx_text_width_n(e->text + start, end + n - start) > width)
             break;
         end += n;
     }
-    gfx_text_n(x1, y, editor.text + start, end - start, GFX_BLACK);
+    gfx_text_n(x1, y, e->text + start, end - start, GFX_BLACK);
 
     if (cursor) {
-        int cx = x1 + gfx_text_width_n(editor.text + start,
-            editor.cursor - start) + (editor.cursor > start ? 1 : 0);
+        int cx = x1 + gfx_text_width_n(e->text + start, e->cursor - start)
+            + (e->cursor > start ? 1 : 0);
         gfx_rect(cx, y - 1, cx, y + FONT_HEIGHT, GFX_BLACK);
     }
 }
@@ -163,7 +185,7 @@ static void draw_input_bar(void)
     else if (editor.len == 0)
         gfx_text(3, y, "Écris ton message…", GFX_BLACK);
     else
-        draw_editor(3, GFX_WIDTH - 3, y, false);
+        draw_editor(&editor, 3, GFX_WIDTH - 3, y, false);
 }
 
 static void draw_main(void)
@@ -174,8 +196,7 @@ static void draw_main(void)
     draw_input_bar();
 }
 
-/* Fond des boîtes de dialogue : l'écran de conversation. */
-static void main_background(void const *context)
+void app_background(void const *context)
 {
     (void)context;
     status_draw(&status, pf_time_ms(), TITLE);
@@ -183,12 +204,15 @@ static void main_background(void const *context)
     draw_input_bar();
 }
 
-static void draw_keyboard_screen(void)
+static void draw_keyboard_screen(editor_t const *e, char const *title)
 {
     gfx_clear();
-    status_draw(&status, pf_time_ms(), TITLE);
+    if (title)
+        ui_title_bar(title);
+    else
+        status_draw(&status, pf_time_ms(), TITLE);
     gfx_frame(0, KB_INPUT_TOP, GFX_WIDTH - 1, KB_TOP - 2, GFX_BLACK);
-    draw_editor(2, GFX_WIDTH - 2, KB_INPUT_TOP + 2, true);
+    draw_editor(e, 2, GFX_WIDTH - 2, KB_INPUT_TOP + 2, true);
     keyboard_draw(&keyboard, KB_TOP);
 }
 
@@ -229,8 +253,7 @@ static void send_message(void)
         chat_add(&chat, CHAT_INFO, "Réponse incompréhensible de l'ESP32.");
 }
 
-/* Écran du clavier. Renvoie quand le message est envoyé ou avec EXIT. */
-static void keyboard_screen(void)
+bool app_edit(editor_t *e, char const *title)
 {
     keyboard_reset(&keyboard);
     uint32_t drawn_second = UINT32_MAX;
@@ -238,7 +261,7 @@ static void keyboard_screen(void)
     for (;;) {
         uint32_t now = pf_time_ms();
         if (now / 1000 != drawn_second) {
-            draw_keyboard_screen();
+            draw_keyboard_screen(e, title);
             gfx_present();
             drawn_second = now / 1000;
         }
@@ -246,32 +269,34 @@ static void keyboard_screen(void)
         input_t key = pf_getkey(true);
         switch (key) {
         case IN_NONE:
-            if (status_due(&status, pf_time_ms()))
-                poll_status();
+            /* La barre d'état reste à jour (sauf sous un titre). */
+            if (!title && status_due(&status, pf_time_ms()))
+                app_poll_status();
             continue;
         case IN_UP:    keyboard_move(&keyboard, 0, -1); break;
         case IN_DOWN:  keyboard_move(&keyboard, 0, 1); break;
         case IN_LEFT:  keyboard_move(&keyboard, -1, 0); break;
         case IN_RIGHT: keyboard_move(&keyboard, 1, 0); break;
         case IN_EXE:
-            if (keyboard_press(&keyboard, &editor) == KB_SEND
-                    && !editor_blank(&editor)) {
-                send_message();
-                return;
-            }
+            if (keyboard_press(&keyboard, e) == KB_SEND && !editor_blank(e))
+                return true;
             break;
         case IN_SHIFT:
             /* Raccourci : comme la touche ⇧ du clavier visuel. */
             keyboard.shift = !keyboard.shift;
             break;
         case IN_DEL:
-            editor_backspace(&editor);
+            editor_backspace(e);
             break;
         case IN_AC:
-            editor_clear(&editor);
+            /* editor_clear() remettrait la longueur maximale à zéro. */
+            while (e->len > 0) {
+                e->cursor = e->len;
+                editor_backspace(e);
+            }
             break;
         case IN_EXIT:
-            return;
+            return false;
         default:
             break;
         }
@@ -295,41 +320,24 @@ static void new_conversation(void)
         follow = true;
         return;
     }
-    char const *lines[] = { replied && r.kind == REPLY_ERROR ? text
-        : "L'ESP32 ne répond pas." };
+    if (replied && r.kind == REPLY_ERROR) {
+        add_info("Erreur : %s", text);
+        follow = true;
+        return;
+    }
+    char const *lines[] = { "L'ESP32 ne répond pas." };
     char const *items[] = { "OK" };
-    ui_dialog("Impossible", lines, 1, items, 1, 0, main_background, NULL);
-}
-
-/* État de la liaison : ESP32, Wi-Fi, heure. */
-static void show_connection(void)
-{
-    poll_status();
-    char esp[32], wifi[32], time[32], clock[9];
-    snprintf(esp, sizeof esp, "ESP32 : %s",
-        status.esp_ok ? "connecté" : "pas de réponse");
-    if (status.wifi)
-        snprintf(wifi, sizeof wifi, "Wi-Fi : %d dBm (%d/4)", status.rssi,
-            protocol_wifi_bars(status.rssi));
-    else
-        snprintf(wifi, sizeof wifi, "Wi-Fi : non connecté");
-    status_time(&status, pf_time_ms(), clock);
-    snprintf(time, sizeof time, "Heure : %s",
-        status.has_time ? clock : "inconnue");
-
-    char const *lines[] = { esp, wifi, time };
-    char const *items[] = { "OK" };
-    ui_dialog("Connexion", lines, 3, items, 1, 0, main_background, NULL);
+    ui_dialog("Impossible", lines, 1, items, 1, 0, app_background, NULL);
 }
 
 /* Menu (touche EXIT). Renvoie faux pour quitter l'app. */
 static bool menu(void)
 {
-    char const *items[] = { "Retour", "Nouvelle conversation",
-        "État de la connexion", "Aide", "Quitter" };
-    switch (ui_dialog("Menu", NULL, 0, items, 5, 0, main_background, NULL)) {
+    char const *items[] = { "Retour", "Nouvelle conversation", "Wi-Fi",
+        "Aide", "Quitter" };
+    switch (ui_dialog("Menu", NULL, 0, items, 5, 0, app_background, NULL)) {
     case 1: new_conversation(); break;
-    case 2: show_connection(); break;
+    case 2: wifi_menu(); break;
     case 3: help_show(); break;
     case 4: return false;
     default: break;
@@ -373,7 +381,7 @@ void app_run(void)
     status_init(&status);
     chat_add(&chat, CHAT_INFO,
         "Bienvenue ! EXE : écrire, ▲▼ : défiler, EXIT : menu.");
-    poll_status();
+    app_poll_status();
 
     uint32_t drawn_second = UINT32_MAX;
     for (;;) {
@@ -388,7 +396,7 @@ void app_run(void)
         switch (key) {
         case IN_NONE:
             if (status_due(&status, pf_time_ms()))
-                poll_status();
+                app_poll_status();
             continue;
         case IN_UP:
             follow = false;
@@ -404,7 +412,8 @@ void app_run(void)
                 follow = true;
             break;
         case IN_EXE:
-            keyboard_screen();
+            if (app_edit(&editor, NULL))
+                send_message();
             break;
         case IN_EXIT:
             if (!menu()) {

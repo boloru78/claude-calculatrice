@@ -33,3 +33,23 @@
 #######
 .##....
 ..#....
+
+# Sécurité des réseaux Wi-Fi, dans la liste des réseaux : cadenas = mot
+# de passe, silhouette = nom d'utilisateur et mot de passe.
+@ wifi_lock
+.###.
+#...#
+#...#
+#####
+##.##
+##.##
+#####
+
+@ wifi_user
+.###.
+.###.
+.###.
+.....
+#####
+#####
+#####

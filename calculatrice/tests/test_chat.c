@@ -131,6 +131,16 @@ static void check_editor(void)
     editor_clear(&e);
     editor_insert(&e, "   ");
     CHECK(editor_blank(&e));
+
+    /* Longueur maximale choisie (nom de réseau : 32 octets). */
+    editor_clear(&e);
+    editor_set_limit(&e, 4);
+    CHECK(editor_insert(&e, "ab") && editor_insert(&e, "é"));
+    CHECK(!editor_insert(&e, "c") && e.len == 4);
+    editor_set_limit(&e, 100000);
+    CHECK(e.limit == EDITOR_MAX);
+    editor_clear(&e);
+    CHECK(e.limit == EDITOR_MAX);
 }
 
 void test_chat(void)

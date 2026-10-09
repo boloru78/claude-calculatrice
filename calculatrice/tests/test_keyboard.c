@@ -129,6 +129,17 @@ static void check_plan(void)
                 texts[t]);
         CHECK(!strcmp(e.text, texts[t]));
     }
+    /* Tous les caractères ASCII imprimables (mots de passe Wi-Fi). */
+    char ascii[96];
+    for (int c = 32; c < 127; c++)
+        ascii[c - 32] = (char)c;
+    ascii[95] = 0;
+    int count = keyboard_plan(ascii, keys, 4096);
+    CHECK(count > 0);
+    editor_t e;
+    replay(keys, count, &e);
+    CHECK(!strcmp(e.text, ascii));
+
     /* Caractère absent du clavier. */
     CHECK(keyboard_plan("€", keys, 4096) == -1);
     /* Trop de touches pour le tableau. */
@@ -144,9 +155,10 @@ static void check_status(void)
     CHECK(!strcmp(time, "--:--:--"));
     CHECK(status_due(&s, 0));
 
-    reply_t r = { REPLY_STATUS, true, -60, true, 23, 59, 58 };
+    reply_t r = { REPLY_STATUS, true, -60, true, 23, 59, 58, "Maison" };
     status_update(&s, true, &r, 1000);
     CHECK(s.esp_ok && s.wifi && !status_due(&s, 5000));
+    CHECK(!strcmp(s.ssid, "Maison"));
     CHECK(status_due(&s, 1000 + STATUS_PERIOD_MS));
     status_time(&s, 1000, time);
     CHECK(!strcmp(time, "23:59:58"));
@@ -156,7 +168,7 @@ static void check_status(void)
 
     /* L'ESP32 ne répond plus : croix, mais l'heure continue. */
     status_update(&s, false, &r, 20000);
-    CHECK(!s.esp_ok && !s.wifi && s.has_time);
+    CHECK(!s.esp_ok && !s.wifi && s.has_time && !s.ssid[0]);
     status_time(&s, 20000, time);
     CHECK(!strcmp(time, "00:00:17"));
 }

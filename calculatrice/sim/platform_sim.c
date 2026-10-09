@@ -260,8 +260,9 @@ bool pf_link_exchange(char const *request, char *response, size_t size,
     if (!fp)
         return false;
 
-    /* Le temps passe pendant l'échange : 2 s pour une question. */
-    now_ms += strncmp(request, "Q ", 2) ? 50 : 2000;
+    /* Le temps passe pendant l'échange : 50 ms pour une demande d'état,
+     * 2 s pour le reste (question, recherche ou connexion Wi-Fi). */
+    now_ms += strcmp(request, "PING") ? 2000 : 50;
 
     bool final = false;
     size_t used = 0;

@@ -29,6 +29,14 @@ help_page_t const HELP_PAGES[] = {
         "◀ ▶ : bouger le curseur",
         "Bas à droite : envoyer",
     } },
+    { "Wi-Fi", {
+        "EXIT, puis Wi-Fi :",
+        "chercher les réseaux,",
+        "puis EXE sur le tien.",
+        "* : mot de passe connu",
+        "Silhouette : nom",
+        "d'utilisateur demandé",
+    } },
     { "En haut de l'écran", {
         "À gauche : l'heure,",
         "réglée par Internet.",
